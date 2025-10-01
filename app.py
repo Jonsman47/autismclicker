@@ -1,4 +1,4 @@
-# app.py — full stack clicker (auth, admin, uploads, shop, sell) — NO UPGRADES
+# app.py — full stack clicker (auth, admin, uploads, shop, sell, leaderboard) — NO UPGRADES
 from flask import Flask, request, redirect, session, jsonify, send_from_directory, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -26,6 +26,7 @@ def load_db():
         with open(DB_PATH, "r", encoding="utf-8") as f:
             db = json.load(f)
             db.setdefault("settings", {"bg": None, "logo": None})
+            db.setdefault("users", {})
             return db
     except:
         return _empty_db()
@@ -136,27 +137,37 @@ def compact(n: float):
             val = round(n/div, 2)
             s = f"{val:.2f}".rstrip("0").rstrip(".")
             return f"{s}{suf}"
-    return str(int(n))
+    try:
+        return str(int(n))
+    except:
+        return str(n)
 
 # ---------- Auth ----------
 @app.get("/register")
 def register_form():
     return f"""<!doctype html><meta charset="utf-8"><title>{T('register')}</title>
     <style>
-      body{{font-family:Inter,Arial;margin:40px;background:#0b0b0b;color:#e5e7eb}}
-      .card{{max-width:460px;margin:0 auto;background:#141414;border:1px solid #2a2a2a;border-radius:14px;padding:22px}}
-      input,button{{border-radius:10px;border:1px solid #2a2a2a;padding:12px;background:#1c1c1c;color:#e5e7eb}}
-      button{{background:#2563eb;border-color:#2563eb;cursor:pointer}}
-      a.btn{{display:inline-block;padding:10px 14px;border-radius:10px;background:#333;color:#ddd;text-decoration:none}}
+      :root {{
+        --bg:#07070a; --panel:#0e0e14; --border:#2b2b38; --txt:#e7e7f5;
+        --violet:#7c3aed; --violet2:#a78bfa; --red:#ef4444; --muted:#a3a3b2;
+      }}
+      *{{box-sizing:border-box}} body{{font-family:Inter,Arial;margin:0;background:radial-gradient(1200px 600px at 20% -10%, rgba(124,58,237,.25), transparent 60%), #000;color:var(--txt)}}
+      .wrap{{max-width:960px;margin:48px auto;padding:0 16px}}
+      .card{{background:linear-gradient(180deg,#0e0e14,#0b0b10);border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:0 0 40px rgba(124,58,237,.08)}}
+      .btn, input, button{{border-radius:12px;border:1px solid var(--border);padding:12px 14px;background:#12121a;color:var(--txt)}}
+      .btn.violet, button{{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed}}
+      a.btn{{text-decoration:none;display:inline-block}}
     </style>
-    <div class="card">
-      <h2 style="margin-top:0">{T('register')}</h2>
-      <form method="post" style="display:grid;gap:12px">
-        <label>Username<br><input name="u" required></label>
-        <label>Password<br><input name="p" type="password" required></label>
-        <button>{T('register')}</button>
-      </form>
-      <p style="margin-top:12px"><a class="btn" href="/">{'← Home'}</a></p>
+    <div class="wrap">
+      <div class="card">
+        <h2 style="margin-top:0">Register</h2>
+        <form method="post" style="display:grid;gap:12px">
+          <label>Username<br><input name="u" required></label>
+          <label>Password<br><input name="p" type="password" required></label>
+          <button class="btn violet">{T('register')}</button>
+        </form>
+        <p style="margin-top:12px"><a class="btn" href="/">{'← Home'}</a></p>
+      </div>
     </div>"""
 
 @app.post("/register")
@@ -176,20 +187,24 @@ def register_post():
 def login_form():
     return f"""<!doctype html><meta charset="utf-8"><title>{T('login')}</title>
     <style>
-      body{{font-family:Inter,Arial;margin:40px;background:#0b0b0b;color:#e5e7eb}}
-      .card{{max-width:460px;margin:0 auto;background:#141414;border:1px solid #2a2a2a;border-radius:14px;padding:22px}}
-      input,button{{border-radius:10px;border:1px solid #2a2a2a;padding:12px;background:#1c1c1c;color:#e5e7eb}}
-      button{{background:#22c55e;border-color:#22c55e;cursor:pointer}}
-      a.btn{{display:inline-block;padding:10px 14px;border-radius:10px;background:#333;color:#ddd;text-decoration:none}}
+      :root {{ --bg:#07070a; --panel:#0e0e14; --border:#2b2b38; --txt:#e7e7f5; --violet:#7c3aed; --red:#ef4444; }}
+      *{{box-sizing:border-box}} body{{font-family:Inter,Arial;margin:0;background:linear-gradient(160deg,rgba(239,68,68,.12),transparent 40%), #000;color:var(--txt)}}
+      .wrap{{max-width:960px;margin:48px auto;padding:0 16px}}
+      .card{{background:linear-gradient(180deg,#0e0e14,#0b0b10);border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:0 0 40px rgba(239,68,68,.08)}}
+      .btn, input, button{{border-radius:12px;border:1px solid var(--border);padding:12px 14px;background:#12121a;color:var(--txt)}}
+      button{{background:linear-gradient(90deg,#ef4444,#7c3aed);border-color:#7c3aed}}
+      a.btn{{text-decoration:none;display:inline-block}}
     </style>
-    <div class="card">
-      <h2 style="margin-top:0">{T('login')}</h2>
-      <form method="post" style="display:grid;gap:12px">
-        <label>Username<br><input name="u" required></label>
-        <label>Password<br><input name="p" type="password" required></label>
-        <button>{T('login')}</button>
-      </form>
-      <p style="margin-top:12px"><a class="btn" href="/">{'← Home'}</a></p>
+    <div class="wrap">
+      <div class="card">
+        <h2 style="margin-top:0">Login</h2>
+        <form method="post" style="display:grid;gap:12px">
+          <label>Username<br><input name="u" required></label>
+          <label>Password<br><input name="p" type="password" required></label>
+          <button>Login</button>
+        </form>
+        <p style="margin-top:12px"><a class="btn" href="/">{'← Home'}</a></p>
+      </div>
     </div>"""
 
 @app.post("/login")
@@ -245,31 +260,35 @@ def home():
 
     user = session.get("user")
     admin_link = f'<a class="btn solid warn" href="/admin">{T("admin")}</a>' if is_admin() else ""
-    res_fmt = compact(res) if isinstance(res,(int,float)) or (isinstance(res,str) and res.replace('.','',1).isdigit()) else res
+    res_fmt = compact(res) if isinstance(res,(int,float)) or (isinstance(res,str) and res.replace(".","",1).isdigit()) else res
 
     return f"""<!doctype html><meta charset="utf-8"><title>{T('title_home')}</title>
     <style>
       :root {{
-        --bg:#0a0a0a; --panel:#131313; --muted:#9aa0a6; --border:#2a2a2a;
-        --btn:#1f2937; --btnTxt:#e5e7eb; --accent:#6366f1; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+        --bg:#020204; --panel:#0b0b12; --panel2:#0f0f18; --muted:#a3a3b2; --border:#232334;
+        --ink:#e7e7f5; --violet:#7c3aed; --violet2:#a78bfa; --red:#ef4444; --rose:#fb7185;
       }}
-      *{{box-sizing:border-box}} body{{font-family:Inter,Arial;background:var(--bg);color:#e5e7eb;margin:0;padding:32px}}
-      .container{{max-width:960px;margin:0 auto}}
-      .panel{{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px}}
-      .btn{{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--btn);color:var(--btnTxt);text-decoration:none;cursor:pointer}}
-      .btn.solid{{background:var(--accent);border-color:var(--accent)}}
-      .btn.ok{{background:var(--ok);border-color:var(--ok)}}
-      .btn.warn{{background:var(--warn);border-color:var(--warn);color:#111}}
-      .btn.danger{{background:var(--danger);border-color:var(--danger)}}
-      input,select,button{{border-radius:12px;border:1px solid var(--border);padding:12px;background:#171717;color:#e5e7eb}}
-      button.solid{{background:var(--accent);border-color:var(--accent);cursor:pointer}}
+      *{{box-sizing:border-box}} body{{font-family:Inter,Arial;background:
+        radial-gradient(1000px 400px at 80% -10%, rgba(239,68,68,.22), transparent 60%),
+        radial-gradient(1000px 600px at -20% 10%, rgba(124,58,237,.28), transparent 65%),
+        #000; color:var(--ink); margin:0; padding:28px}}
+      .container{{max-width:1080px;margin:0 auto}}
+      .panel{{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:20px;padding:20px;box-shadow:0 0 60px rgba(124,58,237,.08)}}
+      .btn{{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:#12121a;color:var(--ink);text-decoration:none;cursor:pointer}}
+      .btn.solid{{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed}}
+      .btn.warn{{background:#fb7185;border-color:#fb7185;color:#140a0a}}
       .row{{display:flex;gap:10px;flex-wrap:wrap;align-items:center}}
-      label b{{display:block;margin-bottom:6px;color:#cbd5e1}}
+      input,select,button{{border-radius:12px;border:1px solid var(--border);padding:12px;background:#13131c;color:var(--ink)}}
+      button.solid{{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed;cursor:pointer}}
+      label b{{display:block;margin-bottom:6px;color:#d9d9ff}}
+      .pill{{padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#10101a;color:#cfcfe8}}
     </style>
     <div class="container">
-      <div class="row" style="justify-content:space-between;margin-bottom:14px">
-        <a class="btn" href="/clicker">🎮 {T('goto_clicker')}</a>
-        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+      <div class="row" style="justify-content:space-between;margin-bottom:16px">
+        <div class="row">
+          <a class="btn solid" href="/clicker">🎮 {T('goto_clicker')}</a>
+          <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+        </div>
         <div class="row">
           <a class="btn" href="/lang?to=en">{T('change_en')}</a>
           <a class="btn" href="/lang?to=fr">{T('change_fr')}</a>
@@ -278,9 +297,9 @@ def home():
       </div>
 
       <div class="panel" style="text-align:center">
-        <h1 style="margin:6px 0">{T('title_home')}</h1>
-        <div style="margin:6px 0">
-          <span>{(T('logged_in_as')+': <b>'+user+'</b> <a class=\"btn\" href=\"/logout\">'+T('logout')+'</a>') if user else T('not_logged_in')}</span>
+        <h1 style="margin:8px 0; letter-spacing:.5px">{T('title_home')}</h1>
+        <div style="margin:8px 0">
+          <span>{(T('logged_in_as')+': <b>'+str(user)+'</b> <a class=\"btn\" href=\"/logout\">'+T('logout')+'</a>') if user else T('not_logged_in')}</span>
           {' | <a class="btn" href="/register">'+T('register')+'</a> <a class="btn" href="/login">'+T('login')+'</a>' if not user else ''}
         </div>
       </div>
@@ -306,7 +325,7 @@ def home():
           <button class="solid" type="submit" style="font-size:18px">{T('compute')}</button>
         </form>
         <p style="margin-top:10px;font-size:20px"><b>{T('total')}:</b> {res_fmt}</p>
-        <p style="color:#9aa0a6">{T('tip')}</p>
+        <p class="pill">{T('tip')}</p>
       </div>
     </div>"""
 
@@ -476,26 +495,28 @@ def admin_panel():
     logo_preview = f'<img src="/uploads/{os.path.basename(st["logo"])}" style="max-height:80px;border-radius:8px">' if st.get("logo") else "<i>None</i>"
     return f"""<!doctype html><meta charset="utf-8"><title>{T('admin')}</title>
     <style>
-      body{{font-family:Inter,Arial;background:#0a0a0a;color:#e5e7eb;margin:0;padding:24px}}
+      :root {{ --panel:#0b0b12; --border:#232334; --ink:#e7e7f5; --violet:#7c3aed; --red:#ef4444 }}
+      *{{box-sizing:border-box}} body{{font-family:Inter,Arial;background:#000;color:var(--ink);margin:0;padding:24px}}
       .container{{max-width:1100px;margin:0 auto}}
-      .card{{background:#121212;border:1px solid #2a2a2a;border-radius:16px;padding:18px;margin-bottom:18px}}
+      .card{{background:linear-gradient(180deg,#0b0b12,#0f0f18);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:18px}}
       table{{width:100%;border-collapse:collapse}}
-      th,td{{border-bottom:1px solid #2a2a2a;padding:10px;text-align:left}}
-      input,button{{border-radius:10px;border:1px solid #2a2a2a;padding:8px;background:#1a1a1a;color:#e5e7eb}}
-      .btn{{background:#374151;border-color:#374151;cursor:pointer;color:#e5e7eb;padding:8px 12px;border-radius:10px;text-decoration:none;display:inline-block}}
-      .btn.ok{{background:#22c55e;border-color:#22c55e}}
-      .btn.warn{{background:#f59e0b;border-color:#f59e0b;color:#111}}
-      .btn.danger{{background:#ef4444;border-color:#ef4444}}
+      th,td{{border-bottom:1px solid var(--border);padding:10px;text-align:left}}
+      input,button{{border-radius:10px;border:1px solid var(--border);padding:8px;background:#11131a;color:#e5e7eb}}
+      .btn{{background:#141625;border-color:#2a2a3a;cursor:pointer;color:#e5e7eb;padding:8px 12px;border-radius:10px;text-decoration:none;display:inline-block}}
+      .btn.ok{{background:linear-gradient(90deg,#7c3aed,#a78bfa)}}
+      .btn.warn{{background:#ef4444;border-color:#ef4444}}
+      .btn.danger{{background:#7c1d1d;border-color:#ef4444}}
       .act{{display:inline-flex;gap:6px;align-items:center;margin:4px 0}}
       .grid{{display:grid;gap:12px;grid-template-columns:1fr 1fr}}
       .row{{display:flex;align-items:center;gap:12px;flex-wrap:wrap}}
-      .pill{{padding:6px 10px;border:1px solid #2a2a2a;border-radius:999px;background:#1a1a1a}}
+      .pill{{padding:6px 10px;border:1px solid #2a2a2a;border-radius:999px;background:#10101a}}
     </style>
     <div class="container">
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
-          <h1 style="margin:4px 0">{T('admin')}</h1>
-          <a class="btn" href="/">{'← Home'}</a>
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+        <h1 style="margin:4px 0">{T('admin')}</h1>
+        <div class="row">
+          <a class="btn" href="/">← Home</a>
+          <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
         </div>
       </div>
 
@@ -507,7 +528,7 @@ def admin_panel():
             <div class="row">
               <input type="file" name="file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg">
               <button class="btn ok">{T('upload')}</button>
-              <a class="btn danger" href="/admin/clear_asset?type=bg">{T('clear')}</a>
+              <a class="btn warn" href="/admin/clear_asset?type=bg">{T('clear')}</a>
               <span class="pill">Current: {bg_preview}</span>
             </div>
           </form>
@@ -516,7 +537,7 @@ def admin_panel():
             <div class="row">
               <input type="file" name="file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg">
               <button class="btn ok">{T('upload')}</button>
-              <a class="btn danger" href="/admin/clear_asset?type=logo">{T('clear')}</a>
+              <a class="btn warn" href="/admin/clear_asset?type=logo">{T('clear')}</a>
               <span class="pill">Current: {logo_preview}</span>
             </div>
           </form>
@@ -619,64 +640,78 @@ def clicker():
 <!doctype html><meta charset="utf-8"><title>Autists Clicker</title>
 <style>
   :root{
-    --bg:#111; --panel:#151515; --muted:#bdbdbd; --border:#2a2a2a;
-    --btn:#1f2937; --btnTxt:#e5e7eb; --accent:#f97316; --accent2:#2563eb; --good:#22c55e; --bad:#ef4444;
+    --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --muted:#b6b6c6; --border:#232334;
+    --btn:#141625; --btnTxt:#e7e7f5; --violet:#7c3aed; --violet2:#a78bfa; --good:#22c55e; --red:#ef4444;
   }
-  *{box-sizing:border-box} body{font-family:Inter,Arial;background:var(--bg);color:#eee;margin:0;padding:18px}
-  .wrap{max-width:980px;margin:0 auto;background:var(--panel);border:1px solid var(--border);padding:16px;border-radius:16px}
+  *{box-sizing:border-box} body{font-family:Inter,Arial;background:
+     radial-gradient(800px 400px at 10% -10%, rgba(124,58,237,.25), transparent 60%),
+     radial-gradient(900px 500px at 110% 20%, rgba(239,68,68,.18), transparent 65%),
+     #000;color:#eee;margin:0;padding:18px}
+  .wrap{max-width:1000px;margin:0 auto;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);padding:16px;border-radius:22px;box-shadow:0 0 60px rgba(124,58,237,.08)}
   .row{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--btn);color:var(--btnTxt);text-decoration:none;cursor:pointer}
-  .btn.orange{background:var(--accent);border-color:var(--accent)}
-  .btn.blue{background:var(--accent2);border-color:var(--accent2)}
-  .btn.green{background:var(--good);border-color:var(--good)}
-  .btn.red{background:var(--bad);border-color:var(--bad)}
-  .pill{padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:#ccc}
-  #click{font-size:32px;padding:22px 42px;border-radius:14px}
-  #shop .card{display:flex;justify-content:space-between;align-items:center;border:1px solid #333;padding:14px;border-radius:12px;background:#1b1b1b}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--btn);color:var(--btnTxt);text-decoration:none;cursor:pointer;transition:transform .05s ease}
+  .btn:active{transform:scale(.98)}
+  .btn.orange{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed}
+  .btn.blue{background:#27284a;border-color:#2d2f58}
+  .btn.green{background:#1f3b28;border-color:#2c5a39}
+  .btn.red{background:#3a1f1f;border-color:#4a2a2a}
+  .pill{padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:#cfcfe8;background:#11121c}
+  #click{font-size:34px;padding:22px 42px;border-radius:16px;box-shadow:0 0 0 0 rgba(124,58,237,.6); position:relative; overflow:hidden}
+  #shop .card{display:flex;justify-content:space-between;align-items:center;border:1px solid #31314a;padding:14px;border-radius:14px;background:#121322}
   #topbar img#logo{max-height:42px;border-radius:10px;display:none}
-  input,button{border-radius:10px;border:1px solid var(--border);padding:10px;background:#1c1c1c;color:#eee}
+  input,button{border-radius:10px;border:1px solid var(--border);padding:10px;background:#15172b;color:#eee}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
+  .stat{background:#0f1020;border:1px solid #2b2d4a;border-radius:14px;padding:10px;text-align:center}
+  .stat .v{font-size:20px;font-weight:700}
+  .shimmer{background:linear-gradient(90deg,rgba(124,58,237,.15),rgba(239,68,68,.15));filter:blur(30px);position:absolute;inset:-30px;z-index:-1}
 </style>
 <div class="wrap" id="root">
   <div class="row" id="topbar">
     <div class="row" style="gap:8px">
       <button class="btn" onclick="setLang('fr')">Français</button>
       <button class="btn" onclick="setLang('en')">English</button>
+      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
       <img id="logo" alt="logo">
     </div>
     <div class="row">
       <a class="btn" href="/">← Home</a>
-      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
       <a class="btn blue" href="/login">Login</a>
       <a class="btn blue" href="/register">Register</a>
       <a class="btn red" href="/logout">Logout</a>
     </div>
   </div>
 
-  <h1 id="title" style="text-align:center;margin:10px 0">Autists Clicker</h1>
-  <p style="text-align:center"><b id="lbl_count">Autists</b>: <span id="count">0</span> | <b id="lbl_cps">a/s</b>: <span id="cps">0</span></p>
+  <h1 id="title" style="text-align:center;margin:10px 0;letter-spacing:.5px;text-shadow:0 0 18px rgba(124,58,237,.35)">Autists Clicker</h1>
+
+  <div class="statgrid">
+    <div class="stat"><div class="k">Autists</div><div class="v" id="count">0</div></div>
+    <div class="stat"><div class="k">a/s</div><div class="v" id="cps">0</div></div>
+    <div class="stat"><div class="k">CPS (clicks/s)</div><div class="v" id="cps_click">0</div></div>
+  </div>
+
   <div style="text-align:center">
-    <button id="click" class="btn orange">+1</button>
+    <button id="click" class="btn orange">+1<div class="shimmer"></div></button>
   </div>
 
   <div class="row" style="margin:12px 0;justify-content:center">
     <button id="btn_save"  class="btn green">Upload</button>
     <button id="btn_load"  class="btn blue">Load</button>
     <button id="btn_reset" class="btn">Reset local</button>
-    <button id="btn_sync_shop" class="btn blue">Sync Boutique</button>
+    <button id="btn_sync_shop" class="btn blue">Sync Shop</button>
     <span id="sync_msg" class="pill">…</span>
   </div>
 
-  <h2 id="lbl_shop" style="text-align:center">Shop</h2>
+  <h2 id="lbl_shop" style="text-align:center;margin-top:8px">Shop</h2>
   <div id="shop" style="display:grid;gap:12px;grid-template-columns:1fr;"></div>
 
-  <div id="custom" style="margin-top:16px;border:1px dashed #444;padding:12px;border-radius:10px;background:#1a1a1a">
+  <div id="custom" style="margin-top:16px;border:1px dashed #34345a;padding:12px;border-radius:12px;background:#11121f">
     <h3 id="lbl_create" style="text-align:center">Create custom Autist (cost: 1000)</h3>
     <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr auto">
       <input id="c_name" placeholder="Name">
       <input id="c_cost" type="number" min="10" step="10" placeholder="Base cost">
       <button id="c_make" class="btn">Create (1000)</button>
     </div>
-    <p id="c_msg" style="color:#aaa;margin-top:6px"></p>
+    <p id="c_msg" style="color:#bcbce8;margin-top:6px"></p>
   </div>
 </div>
 
@@ -690,14 +725,11 @@ let LANG="fr";
 function setLang(l){ LANG = LANGS[l]?l:"fr"; applyLang(); update(); }
 function t(k,...a){ const L=LANGS[LANG]||LANGS.fr; const v=L[k]; return (typeof v==="function")?v(...a):v; }
 function applyLang(){
-  document.getElementById("lbl_count").textContent = t("count");
-  document.getElementById("lbl_cps").textContent = t("cps");
-  document.getElementById("click").textContent = t("click");
   document.getElementById("lbl_shop").textContent = t("shop");
-  document.getElementById("lbl_create").textContent = t("create");
-  document.getElementById("btn_save").textContent = t("upload");
-  document.getElementById("btn_load").textContent = t("load");
-  document.getElementById("btn_reset").textContent = t("reset");
+  document.getElementById("c_msg").textContent = "";
+  const clickBtn=document.getElementById("click");
+  if(clickBtn) clickBtn.firstChild.nodeValue = t("click");
+  document.getElementById("cps_click").textContent = formatNum(cpsClick);
 }
 
 // ===== SHOP DATA =====
@@ -765,11 +797,14 @@ const DEFAULT_SHOP = [...earlyUnits, ...coreUnits, ...midUnits, ...randomUnits, 
 let count = 0, cps = 0;
 let shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
 
+// Clicks-per-second meter
+let clickTimes = [];          // store timestamps (ms) of recent clicks
+let cpsClick = 0;             // current CPS based on last 2 seconds
+const CPS_WINDOW_MS = 2000;   // 2s window for reactive CPS
+
 // Local save (no upgrades)
 function saveLocal(){
-  try{
-    localStorage.setItem("autistes_clicker", JSON.stringify({v:5,count,cps,shop}));
-  }catch(e){ console.error(e); }
+  try{ localStorage.setItem("autistes_clicker", JSON.stringify({v:5,count,cps,shop})); }catch(e){}
 }
 function loadLocal(){
   const raw = localStorage.getItem("autistes_clicker");
@@ -787,7 +822,7 @@ function loadLocal(){
         lvl:  Number(it.lvl)||0
       }));
     }
-  }catch(e){ console.error(e); }
+  }catch(e){}
 }
 
 // ===== UTILS =====
@@ -815,13 +850,21 @@ function rndInc(base){
   return Math.round(val);
 }
 
-// Dynamic click power: scales with cps (keeps growing beyond 2000)
-function clickPower(){
-  return Math.max(1, Math.floor(1 + (cps/1000)*25));
-}
+// Dynamic click power: scales with cps
+function clickPower(){ return Math.max(1, Math.floor(1 + (cps/1000)*25)); }
 function updateClickButton(){
   const btn = document.getElementById("click");
-  if (btn) btn.textContent = "+" + formatNum(clickPower());
+  if (btn) btn.childNodes[0].nodeValue = "+" + formatNum(clickPower());
+}
+
+// Clicks per second (client-side)
+function pushClick(){
+  const now = Date.now();
+  clickTimes.push(now);
+  // keep only last window
+  clickTimes = clickTimes.filter(t=> now - t <= CPS_WINDOW_MS);
+  cpsClick = clickTimes.length / (CPS_WINDOW_MS/1000);
+  document.getElementById("cps_click").textContent = cpsClick.toFixed(2);
 }
 
 function addCustom(name, base){
@@ -853,7 +896,7 @@ function sellItem(i){
 
 // ===== RENDER =====
 function render(){
-  const el=document.getElementById("shop"); 
+  const el=document.getElementById("shop");
   el.innerHTML="";
   shop.forEach((it,i)=>{
     const price=costOf(it), canBuy=count>=price;
@@ -867,12 +910,12 @@ function render(){
     row.innerHTML=`
       <div style="text-align:left">
         <div style="font-size:18px;"><b>${it.name}</b> (+${formatNum(effectiveInc(it))}/s per lvl)</div>
-        <div>${t("level")}: ${formatNum(it.lvl)} — ${t("cost")}: ${formatNum(price)}</div>
+        <div>Level: ${formatNum(it.lvl)} — Cost: ${formatNum(price)}</div>
       </div>
       <div style="display:flex; gap:6px">
-        <button data-i="${i}" class="${btnStyle}">${t("buy")} (+${formatNum(effectiveInc(it))}/s)</button>
+        <button data-i="${i}" class="${btnStyle}">Buy (+${formatNum(effectiveInc(it))}/s)</button>
         <button data-sell="${i}" class="${sellStyle}" ${canSell?"":"disabled"}>
-          ${t("sell")} (-1) → +${refund}
+          Sell (-1) → +${refund}
         </button>
       </div>
     `;
@@ -883,9 +926,7 @@ function render(){
       }
     };
     const sbtn = row.querySelector("[data-sell]");
-    if(canSell){
-      sbtn.onclick=()=>{ sellItem(i); };
-    }
+    if(canSell){ sbtn.onclick=()=>{ sellItem(i); }; }
     el.appendChild(row);
   });
 }
@@ -899,6 +940,7 @@ function update(){
 }
 document.getElementById("click").onclick = () => {
   count += clickPower();
+  pushClick();
   update();
   saveLocal();
 };
@@ -932,7 +974,7 @@ document.getElementById("btn_save").onclick=saveServer;
 document.getElementById("btn_load").onclick=loadServer;
 document.getElementById("btn_reset").onclick=()=>{ localStorage.removeItem("autistes_clicker"); count=0; shop=JSON.parse(JSON.stringify(DEFAULT_SHOP)); recalc(); update(); };
 
-// Sync boutique sans reset
+// Sync shop without reset
 function syncShopWithDefaults(){
   const curMap = new Map(shop.map(it=>[it.key,it]));
   DEFAULT_SHOP.forEach(def=>{
@@ -942,7 +984,7 @@ function syncShopWithDefaults(){
   });
   recalc(); render(); update(); saveLocal();
 }
-document.getElementById("btn_sync_shop").onclick=()=>{ syncShopWithDefaults(); document.getElementById("sync_msg").textContent="Boutique sync ✓"; };
+document.getElementById("btn_sync_shop").onclick=()=>{ syncShopWithDefaults(); document.getElementById("sync_msg").textContent="Shop sync ✓"; };
 
 // Settings bg/logo
 async function applySettings(){
@@ -965,8 +1007,8 @@ setInterval(()=>{ count+=cps; update(); saveLocal(); },1000);
 </script>
 """
 
+# ---------- Leaderboard (current count & a/s, refresh via client every 60s) ----------
 def _collect_leaderboards_simple():
-    # reads current saved progress only (not historical peaks)
     with lock:
         db = load_db()
         rows = []
@@ -986,19 +1028,21 @@ def api_leaderboard():
     top_count, top_cps = _collect_leaderboards_simple()
     return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})
 
-
 @app.get("/leaderboard")
 def leaderboard_page():
     page = """<!doctype html><meta charset="utf-8"><title>Leaderboard</title>
     <style>
-      :root { --bg:#0a0a0a; --panel:#121212; --border:#2a2a2a; --txt:#e5e7eb; }
-      *{box-sizing:border-box} body{font-family:Inter,Arial;background:var(--bg);color:var(--txt);margin:0;padding:24px}
+      :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
+      *{box-sizing:border-box} body{font-family:Inter,Arial;background:
+        radial-gradient(900px 400px at 0% -10%, rgba(124,58,237,.25), transparent 60%),
+        radial-gradient(900px 500px at 120% 10%, rgba(239,68,68,.18), transparent 65%),
+        #000; color:var(--ink); margin:0; padding:24px}
       .wrap{max-width:980px;margin:0 auto}
-      .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px}
+      .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 0 40px rgba(124,58,237,.08)}
       table{width:100%;border-collapse:collapse}
       th,td{border-bottom:1px solid var(--border);padding:10px}
       th:last-child, td:last-child{text-align:right}
-      a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none}
+      a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none;background:#141625}
       .grid{display:grid;gap:16px;grid-template-columns:1fr; }
       @media (min-width:900px){ .grid{grid-template-columns:1fr 1fr} }
       .muted{color:#9aa0a6}
@@ -1060,7 +1104,6 @@ def leaderboard_page():
     </script>
     """
     return page
-
 
 # ---------- catch-all ----------
 @app.get("/<path:_>")
