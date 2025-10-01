@@ -269,6 +269,7 @@ def home():
     <div class="container">
       <div class="row" style="justify-content:space-between;margin-bottom:14px">
         <a class="btn" href="/clicker">🎮 {T('goto_clicker')}</a>
+        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
         <div class="row">
           <a class="btn" href="/lang?to=en">{T('change_en')}</a>
           <a class="btn" href="/lang?to=fr">{T('change_fr')}</a>
@@ -644,6 +645,7 @@ def clicker():
     </div>
     <div class="row">
       <a class="btn" href="/">← Home</a>
+      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
       <a class="btn blue" href="/login">Login</a>
       <a class="btn blue" href="/register">Register</a>
       <a class="btn red" href="/logout">Logout</a>
