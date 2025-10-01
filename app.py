@@ -963,6 +963,103 @@ setInterval(()=>{ count+=cps; update(); saveLocal(); },1000);
 </script>
 """
 
+def _collect_leaderboards_simple():
+    # reads current saved progress only (not historical peaks)
+    with lock:
+        db = load_db()
+        rows = []
+        for u, doc in (db.get("users") or {}).items():
+            prog = (doc or {}).get("progress") or {}
+            rows.append({
+                "user": u,
+                "count": float(prog.get("count") or 0.0),
+                "cps":   float(prog.get("cps")   or 0.0),
+            })
+    top_count = sorted(rows, key=lambda r: r["count"], reverse=True)[:50]
+    top_cps   = sorted(rows, key=lambda r: r["cps"],   reverse=True)[:50]
+    return top_count, top_cps
+
+@app.get("/api/leaderboard")
+def api_leaderboard():
+    top_count, top_cps = _collect_leaderboards_simple()
+    return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})
+
+
+@app.get("/leaderboard")
+def leaderboard_page():
+    page = """<!doctype html><meta charset="utf-8"><title>Leaderboard</title>
+    <style>
+      :root { --bg:#0a0a0a; --panel:#121212; --border:#2a2a2a; --txt:#e5e7eb; }
+      *{box-sizing:border-box} body{font-family:Inter,Arial;background:var(--bg);color:var(--txt);margin:0;padding:24px}
+      .wrap{max-width:980px;margin:0 auto}
+      .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th,td{border-bottom:1px solid var(--border);padding:10px}
+      th:last-child, td:last-child{text-align:right}
+      a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none}
+      .grid{display:grid;gap:16px;grid-template-columns:1fr; }
+      @media (min-width:900px){ .grid{grid-template-columns:1fr 1fr} }
+      .muted{color:#9aa0a6}
+    </style>
+    <div class="wrap">
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+        <h1 style="margin:0">Leaderboard</h1>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="updated" class="muted">—</span>
+          <a class="btn" href="/">← Home</a>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h2 style="margin:0 0 8px 0">Most Autists (current)</h2>
+          <table id="tbl_count"><thead><tr><th>#</th><th>User</th><th>Autists</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="card">
+          <h2 style="margin:0 0 8px 0">Most Autists / sec (current)</h2>
+          <table id="tbl_cps"><thead><tr><th>#</th><th>User</th><th>a/s</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="card muted">Auto-updates every 60s.</div>
+    </div>
+    <script>
+      function fmt(n){
+        n = Number(n)||0;
+        if (n>=1e12) return (n/1e12).toFixed(2).replace(/\\.00$/,'')+'t';
+        if (n>=1e9)  return (n/1e9).toFixed(2).replace(/\\.00$/,'')+'b';
+        if (n>=1e6)  return (n/1e6).toFixed(2).replace(/\\.00$/,'')+'m';
+        if (n>=1e3)  return (n/1e3).toFixed(2).replace(/\\.00$/,'')+'k';
+        return Math.floor(n);
+      }
+      function renderTable(tbody, rows, key){
+        tbody.innerHTML = '';
+        if(!rows || !rows.length){
+          tbody.innerHTML = '<tr><td colspan="3" class="muted">Empty</td></tr>';
+          return;
+        }
+        rows.forEach((r,i)=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>'+(i+1)+'</td><td>'+r.user+'</td><td>'+fmt(r[key])+'</td>';
+          tbody.appendChild(tr);
+        });
+      }
+      async function loadLB(){
+        try{
+          const r = await fetch('/api/leaderboard',{cache:'no-store'});
+          const j = await r.json();
+          if(j && j.ok){
+            renderTable(document.querySelector('#tbl_count tbody'), j.top_count, 'count');
+            renderTable(document.querySelector('#tbl_cps tbody'),   j.top_cps,   'cps');
+            document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+          }
+        }catch(e){}
+      }
+      loadLB();
+      setInterval(loadLB, 60000); // every 60s
+    </script>
+    """
+    return page
+
+
 # ---------- catch-all ----------
 @app.get("/<path:_>")
 def any_route(_):
