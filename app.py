@@ -756,14 +756,14 @@ const earlyUnits = [
 ];
 
 const coreUnits = [
-  mk("Remi - Autiste", "remi", 1_000, 10),
-  mk("Jonsman - Autiste", "jonsman", 10_000, 120),
-  mk("Hector - Autiste", "hector", 30_000, 350),
-  mk("Valentin - Autiste", "valentin", 75_000, 900),
-  mk("Johan - Autiste", "johan", 120_000, 1_800),
-  mk("Viki - Autiste", "viki", 180_000, 2_700),
-  mk("Paul - Autiste", "paul", 240_000, 3_600),
-  mk("Sa Mère - Autiste", "samere", 320_000, 5_000),
+  mk("Remi - Autiste", "remi", 1_000, 15),
+  mk("Jonsman - Autiste", "jonsman", 10_000, 150),
+  mk("Hector - Autiste", "hector", 30_000, 500),
+  mk("Valentin - Autiste", "valentin", 75_000, 1_000),
+  mk("Johan - Autiste", "johan", 120_000, 2_000),
+  mk("Viki - Autiste", "viki", 180_000, 3_000),
+  mk("Paul - Autiste", "paul", 240_000, 4_500),
+  mk("Sa Mère - Autiste", "samere", 320_000, 6_000),
 ];
 
 const midUnits = [
@@ -778,41 +778,49 @@ const midUnits = [
 ];
 
 const gigaUnits = [
-  mk("Autiste Fusion Reactor", "fusion", 500_000_000, 20_000_000),
-  mk("Quantum Portail Autiste", "qportal", 2_000_000_000, 90_000_000),
-  mk("AI Swarm Autiste", "aiswarm", 10_000_000_000, 500_000_000),
-  mk("Planet Factory Autiste", "planet", 50_000_000_000, 2_000_000_000),
-  mk("Black Hole Autiste Collider", "bhc", 200_000_000_000, 8_000_000_000),
-  mk("Multiverse Franchise Autiste", "multi", 1_000_000_000_000, 40_000_000_000),
-  mk("Time Machine Autiste", "timemachine", 5_000_000_000_000, 200_000_000_000),
-  mk("Galactic Autiste Conglomerate", "galactic", 20_000_000_000_000, 800_000_000_000),
-  mk("Dimensional Autiste Empire", "dimemp", 100_000_000_000_000, 3_500_000_000_000),
+  mk("Autiste Fusion Reactor", "fusion", 500_000_000, 30_000_000),
+  mk("Quantum Portail Autiste", "qportal", 2_000_000_000, 150_000_000),
+  mk("AI Swarm Autiste", "aiswarm", 10_000_000_000, 1_000_000_000),
+  mk("Planet Factory Autiste", "planet", 50_000_000_000, 5_000_000_000),
+  mk("Black Hole Autiste Collider", "bhc", 200_000_000_000, 15_000_000_000),
+  mk("Multiverse Franchise Autiste", "multi", 1_000_000_000_000, 100_000_000_000),
+  mk("Time Machine Autiste", "timemachine", 5_000_000_000_000, 500_000_000_000),
+  mk("Galactic Autiste Conglomerate", "galactic", 20_000_000_000_000, 2_000_000_000_000),
+  mk("Dimensional Autiste Empire", "dimemp", 100_000_000_000_000, 15_000_000_000_000),
 ];
 
 const randomUnits = [
-  mk("Chaussettes Autistes", "sock", 750_000, 20_000),
-  mk("Autiste iPhone 34", "iphone", 5_000_000, 150_000),
-  mk("Autiste Tesla Cybertruck", "tesla", 20_000_000, 600_000),
-  mk("Autiste PC Gamer", "pcgamer", 75_000_000, 2_500_000),
-  mk("Autiste McDo Factory", "mcdo", 200_000_000, 9_000_000),
-  mk("Autiste SpaceX Rocket", "rocket", 1_000_000_000, 50_000_000),
-  mk("Autiste Crypto Mine", "crypto", 5_000_000_000, 200_000_000),
-  mk("Autiste Nuclear Plant", "nuclear", 20_000_000_000, 800_000_000),
-  mk("Autiste Mars Colony", "mars", 100_000_000_000, 4_000_000_000),
-  mk("Autiste Black Market", "black", 500_000_000_000, 20_000_000_000),
+  mk("Chaussettes Autistes", "sock", 750_000, 25_000),
+  mk("Autiste iPhone 34", "iphone", 5_000_000, 200_000),
+  mk("Autiste Tesla Cybertruck", "tesla", 20_000_000, 800_000),
+  mk("Autiste PC Gamer", "pcgamer", 75_000_000, 3_000_000),
+  mk("Autiste McDo Factory", "mcdo", 200_000_000, 12_000_000),
+  mk("Autiste SpaceX Rocket", "rocket", 1_000_000_000, 100_000_000),
+  mk("Autiste Crypto Mine", "crypto", 5_000_000_000, 500_000_000),
+  mk("Autiste Nuclear Plant", "nuclear", 20_000_000_000, 2_000_000_000),
+  mk("Autiste Mars Colony", "mars", 100_000_000_000, 10_000_000_000),
+  mk("Autiste Black Market", "black", 500_000_000_000, 50_000_000_000),
 ];
 
 const megaUnits = [
-  mk("Autiste Dyson Sphere", "dyson", 1e15, 5e10),
-  mk("Empire Autiste Galactique", "empiregal", 1e16, 1e12),
-  mk("Autiste Univers Portable", "universe", 1e18, 1e15),
-  mk("Simulation Autiste Infinie", "simul", 1e20, 5e12),
-  mk("Autiste Dieu Ancien", "god", 1e24, 1e18),
-  mk("Autiste Omnivers", "omniverse", 1e28, 1e21),
-  mk("Autiste Source du Tout", "source", 1e33, 1e24),
+  mk("Autiste Dyson Sphere", "dyson", 1e15, 5e11),
+  mk("Empire Autiste Galactique", "empiregal", 1e16, 1e14),
+  mk("Autiste Univers Portable", "universe", 1e18, 2e16),
+  mk("Simulation Autiste Infinie", "simul", 1e20, 1e15),
+  mk("Autiste Dieu Ancien", "god", 1e24, 1e19),
+  mk("Autiste Omnivers", "omniverse", 1e28, 1e22),
+  mk("Autiste Source du Tout", "source", 1e33, 1e26),
 ];
 
-const DEFAULT_SHOP = [...earlyUnits, ...coreUnits, ...midUnits, ...randomUnits, ...gigaUnits, ...megaUnits];
+const DEFAULT_SHOP = [
+  ...earlyUnits, 
+  ...coreUnits, 
+  ...midUnits, 
+  ...randomUnits, 
+  ...gigaUnits, 
+  ...megaUnits
+];
+
 
 // ===== STATE & SAVE =====
 let count = 0, cps = 0;
