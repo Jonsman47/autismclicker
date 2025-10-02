@@ -127,13 +127,27 @@ def get_lang():
 
 def T(key): return STR.get(get_lang(), STR["en"]).get(key, key)
 
-def compact(n: float):
+def compact(n):
     try:
         n = float(n)
     except:
         return str(n)
-    for div, suf in [(1e12,"t"),(1e9,"b"),(1e6,"m"),(1e3,"k")]:
-        if n >= div:
+    # short scale jusqu’à 1e33
+    scales = [
+        (1e33, "de"),  # decillion
+        (1e30, "no"),  # nonillion
+        (1e27, "oc"),  # octillion
+        (1e24, "sp"),  # septillion
+        (1e21, "sx"),  # sextillion
+        (1e18, "qi"),  # quintillion
+        (1e15, "qa"),  # quadrillion
+        (1e12, "t"),   # trillion
+        (1e9,  "b"),   # billion
+        (1e6,  "m"),   # million
+        (1e3,  "k"),   # thousand
+    ]
+    for div, suf in scales:
+        if abs(n) >= div:
             val = round(n/div, 2)
             s = f"{val:.2f}".rstrip("0").rstrip(".")
             return f"{s}{suf}"
@@ -798,11 +812,52 @@ let count = 0, cps = 0;
 let shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
 
 // Clicks-per-second meter
-let clickTimes = [];          // store timestamps (ms) of recent clicks
-let cpsClick = 0;             // current CPS based on last 2 seconds
-const CPS_WINDOW_MS = 2000;   // 2s window for reactive CPS
+let clickTimes = [];
+let cpsClick = 0;
+const CPS_WINDOW_MS = 2000;
 
-// Local save (no upgrades)
+// ===== UTILS =====
+function formatNum(n){
+  n = Number(n)||0;
+  const scales = [
+    [1e33,"de"], [1e30,"no"], [1e27,"oc"], [1e24,"sp"], [1e21,"sx"],
+    [1e18,"qi"], [1e15,"qa"], [1e12,"t"],  [1e9,"b"],   [1e6,"m"], [1e3,"k"]
+  ];
+  for (const [div,suf] of scales){
+    if (Math.abs(n) >= div){
+      const val = (n/div).toFixed(2).replace(/\\.00$/,'').replace(/(\\.\\d*[1-9])0$/,'$1');
+      return `${val}${suf}`;
+    }
+  }
+  return String(Math.trunc(n));
+}
+function costOf(i){ return Math.floor(i.base*Math.pow(1.15,i.lvl)); }
+function effectiveInc(it){ return it.inc; }
+function recalc(){ cps = shop.reduce((s,x)=> s + effectiveInc(x)*(Number(x.lvl)||0), 0); }
+function rndInc(base){
+  if(!base || base<=0) return 1;
+  let min = Math.floor(Math.sqrt(base));
+  let max = Math.floor(Math.sqrt(base)*75);
+  if(min<1) min=1;
+  const val = min + Math.random()*(max-min);
+  return Math.round(val);
+}
+function clickPower(){ return Math.max(1, Math.floor(1 + (cps/1000)*25)); }
+function updateClickButton(){
+  const btn = document.getElementById("click");
+  if (btn) btn.childNodes[0].nodeValue = "+" + formatNum(clickPower());
+}
+
+// Clicks per second (client-side)
+function pushClick(){
+  const now = Date.now();
+  clickTimes.push(now);
+  clickTimes = clickTimes.filter(t=> now - t <= CPS_WINDOW_MS);
+  cpsClick = clickTimes.length / (CPS_WINDOW_MS/1000);
+  document.getElementById("cps_click").textContent = cpsClick.toFixed(2);
+}
+
+// ===== SAVE =====
 function saveLocal(){
   try{ localStorage.setItem("autistes_clicker", JSON.stringify({v:5,count,cps,shop})); }catch(e){}
 }
@@ -823,75 +878,6 @@ function loadLocal(){
       }));
     }
   }catch(e){}
-}
-
-// ===== UTILS =====
-function formatNum(n){
-  n=Number(n)||0;
-  if (n>=1e12) return (n/1e12).toFixed(2).replace(/\\.00$/,"")+"t";
-  if (n>=1e9)  return (n/1e9).toFixed(2).replace(/\\.00$/,"")+"b";
-  if (n>=1e6)  return (n/1e6).toFixed(2).replace(/\\.00$/,"")+"m";
-  if (n>=1e3)  return (n/1e3).toFixed(2).replace(/\\.00$/,"")+"k";
-  return Math.floor(n);
-}
-function costOf(i){ return Math.floor(i.base*Math.pow(1.15,i.lvl)); }
-
-// Effective per-level production (no global/unit multipliers since upgrades are removed)
-function effectiveInc(it){ return it.inc; }
-function recalc(){ cps = shop.reduce((s,x)=> s + effectiveInc(x)*(Number(x.lvl)||0), 0); }
-
-// Random production based on cost (kept from previous tuning)
-function rndInc(base){
-  if(!base || base<=0) return 1;
-  let min = Math.floor(Math.sqrt(base));
-  let max = Math.floor(Math.sqrt(base)*75);
-  if(min<1) min=1;
-  const val = min + Math.random()*(max-min);
-  return Math.round(val);
-}
-
-// Dynamic click power: scales with cps
-function clickPower(){ return Math.max(1, Math.floor(1 + (cps/1000)*25)); }
-function updateClickButton(){
-  const btn = document.getElementById("click");
-  if (btn) btn.childNodes[0].nodeValue = "+" + formatNum(clickPower());
-}
-
-// Clicks per second (client-side)
-function pushClick(){
-  const now = Date.now();
-  clickTimes.push(now);
-  // keep only last window
-  clickTimes = clickTimes.filter(t=> now - t <= CPS_WINDOW_MS);
-  cpsClick = clickTimes.length / (CPS_WINDOW_MS/1000);
-  document.getElementById("cps_click").textContent = cpsClick.toFixed(2);
-}
-
-function addCustom(name, base){
-  if(count<1000) return null;
-  const safeBase = Math.max(10, Math.floor(Number(base)||0));
-  const u = {
-    key: "custom-"+Date.now(),
-    name: (name||"Custom Autist").trim(),
-    base: safeBase,
-    inc: rndInc(safeBase),
-    lvl: 0
-  };
-  count -= 1000;
-  shop.push(u);
-  recalc(); render(); saveLocal(); updateClickButton();
-  return u;
-}
-
-// Sell 1 level → 50% of current price
-function sellItem(i){
-  const it = shop[i];
-  if(!it || it.lvl<=0) return;
-  const price = costOf(it);
-  const refund = Math.floor(price*0.5);
-  it.lvl -= 1;
-  count  += refund;
-  recalc(); render(); saveLocal(); updateClickButton();
 }
 
 // ===== RENDER =====
@@ -929,6 +915,17 @@ function render(){
     if(canSell){ sbtn.onclick=()=>{ sellItem(i); }; }
     el.appendChild(row);
   });
+}
+
+// Sell 1 level → 50% of current price
+function sellItem(i){
+  const it = shop[i];
+  if(!it || it.lvl<=0) return;
+  const price = costOf(it);
+  const refund = Math.floor(price*0.5);
+  it.lvl -= 1;
+  count  += refund;
+  recalc(); render(); saveLocal(); updateClickButton();
 }
 
 // ===== UI =====
@@ -1070,11 +1067,17 @@ def leaderboard_page():
     <script>
       function fmt(n){
         n = Number(n)||0;
-        if (n>=1e12) return (n/1e12).toFixed(2).replace(/\\.00$/,'')+'t';
-        if (n>=1e9)  return (n/1e9).toFixed(2).replace(/\\.00$/,'')+'b';
-        if (n>=1e6)  return (n/1e6).toFixed(2).replace(/\\.00$/,'')+'m';
-        if (n>=1e3)  return (n/1e3).toFixed(2).replace(/\\.00$/,'')+'k';
-        return Math.floor(n);
+        const scales = [
+          [1e33,'de'],[1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],
+          [1e18,'qi'],[1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']
+        ];
+        for (const [div,suf] of scales){
+          if (Math.abs(n) >= div){
+            const val = (n/div).toFixed(2).replace(/\\.00$/,'').replace(/(\\.\\d*[1-9])0$/,'$1');
+            return val + suf;
+          }
+        }
+        return String(Math.trunc(n));
       }
       function renderTable(tbody, rows, key){
         tbody.innerHTML = '';
@@ -1100,7 +1103,7 @@ def leaderboard_page():
         }catch(e){}
       }
       loadLB();
-      setInterval(loadLB, 60000); // every 60s
+      setInterval(loadLB, 60000);
     </script>
     """
     return page
