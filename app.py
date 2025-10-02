@@ -749,9 +749,9 @@ function applyLang(){
 // ===== SHOP DATA =====
 const mk = (name, key, base, inc) => ({ key, name, base, inc, lvl:0 });
 const earlyUnits = [
-  mk("Petit caillou Autiste","rock",10,0.1),
-  mk("Autiste en bois","wood",50,0.5),
-  mk("Stylo Autiste","pen",200,1.5),
+  mk("Petit caillou Autiste","rock",10,1),
+  mk("Autiste en bois","wood",50,3),
+  mk("Stylo Autiste","pen",200,5),
 ];
 const coreUnits = [
   mk("Remi - Autiste","remi",1_000,10),
@@ -798,7 +798,7 @@ const randomUnits = [
 ];
 const megaUnits = [
   mk("Autiste Dyson Sphere","dyson",1e15,5e10),
-  mk("Empire Autiste Galactique","empiregal",1e16,2e11),
+  mk("Empire Autiste Galactique","empiregal",1e16,1e9),
   mk("Autiste Univers Portable","universe",1e18,1e12),
   mk("Simulation Autiste Infinie","simul",1e20,5e12),
   mk("Autiste Dieu Ancien","god",1e24,1e15),
