@@ -2201,32 +2201,32 @@ def leaderboard_page():
         return String(Math.trunc(n));
       }
 
-      function renderTable(tbody, rows, key){
-        tbody.innerHTML = '';
-        if(!rows || !rows.length){
-          tbody.innerHTML = '<tr><td colspan="3" class="muted">Empty</td></tr>';
-          return;
-        }
+function renderTable(tbody, rows, key){
+  tbody.innerHTML = '';
+  if(!rows || !rows.length){
+    tbody.innerHTML = '<tr><td colspan="3" class="muted">Empty</td></tr>';
+    return;
+  }
 
-        rows.forEach((r,i)=>{
-          const tr = document.createElement('tr');
-          let name = r.user;
-          let badge = '';
+  rows.forEach((r,i)=>{
+    const tr = document.createElement('tr');
+    let name = r.user;
+    let badge = '';
 
-          // Highlight Creator
-          if (name && name.toLowerCase() === 'jonsman47') {
-            name = `<span style="color:#b24ef5;font-weight:700">${name}</span>`;
-            badge = ` <span style="font-size:0.75rem;background:#b24ef5;color:#fff;padding:2px 6px;border-radius:6px;margin-left:6px;">CREATOR</span>`;
-          }
+    if (name && name.toLowerCase() === 'jonsman47') {
+      name = `<span style="color:#b24ef5;font-weight:700">${name}</span>`;
+      badge = ` <span style="font-size:0.75rem;background:#b24ef5;color:#fff;padding:2px 6px;border-radius:6px;margin-left:6px;">CREATOR</span>`;
+    }
 
-          tr.innerHTML = `
-            <td>${i+1}</td>
-            <td>${name}${badge}</td>
-            <td>${fmt(r[key])}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      }
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td>${name}${badge}</td>
+      <td>${fmt(r[key])}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
 
       async function loadLB(){
         try{
