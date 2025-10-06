@@ -2126,23 +2126,21 @@ def api_leaderboard():
 
         for name, doc in users.items():
             prog = doc.get("progress", {})
-            count = prog.get("count", 0)
-            cps = prog.get("cps", 0)
             rows.append({
                 "user": name,
-                "count": count,
-                "cps": cps,
+                "count": prog.get("count", 0),
+                "cps": prog.get("cps", 0),
             })
 
-        # sort by count and cps separately
         top_count = sorted(rows, key=lambda x: x["count"], reverse=True)[:50]
-        top_cps = sorted(rows, key=lambda x: x["cps"], reverse=True)[:50]
+        top_cps   = sorted(rows, key=lambda x: x["cps"],   reverse=True)[:50]
 
     return jsonify({
         "ok": True,
         "top_count": top_count,
         "top_cps": top_cps
     })
+
 
 @app.get("/leaderboard")
 def leaderboard_page():
