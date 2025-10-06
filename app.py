@@ -260,6 +260,11 @@ def set_lang():
 @app.route("/", methods=["GET","POST"])
 def home():
     get_lang()
+    import html
+    with lock:
+        _db = load_db()
+        update_txt = (_db.get("settings", {}) or {}).get("update", "")
+    update_txt = html.escape(update_txt)
     a_str = request.form.get("a","")
     b_str = request.form.get("b","")
     op = request.form.get("op","add")
@@ -971,201 +976,6 @@ def admin_clear_asset():
 import random
 
 BOT_NAMES = [
-    "jaime les fucks", "RemiBot", "Hectoro", "VikiVibes", "Johan93", "Paulito",
-    "PixelBaguette", "CroissantKing", "Z3r0x", "ValouTV", "MichelineAI",
-    "Jean-Kevin", "MC_Dojo", "NoScopeNico", "LeFromage", "TchoupiPro",
-    "AnanasSurPizza", "LeRatDuMetro", "BZH_Bot", "CapybaraFR", "Alyx_77",
-    "BerkBerk", "Gigachad_2000", "RNGesus", "MmeTulipe", "ChipsSaveurSel",
-]
-
-FAKE_REVIEW_LINES_FR = [
-    "Jeu super addictif !", "Pas mal, peut mieux faire.", "Incroyable, j’adore.",
-    "Des bugs mais ça passe.", "Très fun entre deux cours.", "Interface propre !",
-    "J’ai reset par erreur… pls help :)", "Le prestige est satisfaisant.",
-    "Boutique équilibrée, c’est cool.", "J’attends la prochaine mise à jour !",
-]
-
-FAKE_REVIEW_LINES_EN = [
-    "Surprisingly addictive!", "Not bad, room to improve.", "I love it!",
-    "Some bugs but still fun.", "Clean UI, nice work.", "Prestige feels good.",
-    "Great for short sessions.", "Shop balance is decent.",
-]
-
-def _rand_username():
-    return random.choice(BOT_NAMES) + (str(random.randint(1, 999)) if random.random() < 0.4 else "")
-
-def _fake_progress():
-    # Roughly log-normal-ish spread so a few are huge, most are small:
-    cps = max(0.0, round(random.expovariate(1/2_000_000) * 1_000_000, 2))  # avg ~2M cps
-    count = max(cps * random.uniform(50, 300), random.uniform(1e3, 1e9))
-    return {
-        "v": 5,
-        "count": float(count),
-        "cps": float(cps),
-        "shop": [],
-        "saved_at": int(time.time()),
-    }
-
-def _fake_review(user):
-    stars = random.choices([5,4,3,2,1], weights=[45,25,15,10,5], k=1)[0]
-    text = random.choice(FAKE_REVIEW_LINES_FR + FAKE_REVIEW_LINES_EN)
-    # small chance to append an emoji or extra bit
-    if random.random() < 0.25:
-        text += " ⭐"
-    return {"u": user[:40] or "Anonymous", "stars": int(stars), "text": text[:800], "ts": int(time.time())}
-
-def seed_bots(n=25, overwrite_existing=False, max_total=200):
-    """
-    Create up to n bot users with fake progress.
-    - overwrite_existing=False: skip names that already exist
-    - max_total: safety cap on total users
-    """
-    with lock:
-        db = load_db()
-        users = db.setdefault("users", {})
-        created = 0
-        if len(users) >= max_total:
-            return 0
-
-        for _ in range(n):
-            name = _rand_username()
-            if (name in users) and not overwrite_existing:
-                continue
-            users[name] = {
-                "pw": generate_password_hash(secrets.token_hex(8)),  # random pw
-                "progress": _fake_progress(),
-                "prestige": _empty_prestige(),
-            }
-            created += 1
-            if len(users) >= max_total:
-                break
-
-        save_db(db)
-        return created
-
-def seed_fake_reviews(m=40):
-    """
-    Append m fake reviews from random names (new or existing).
-    Keeps last 1000 reviews overall (same behavior as /api/reviews).
-    """
-    with lock:
-        db = load_db()
-        users = list((db.get("users") or {}).keys())
-        if not users:
-            users = [ _rand_username() for _ in range(10) ]  # fallback names
-
-        db.setdefault("reviews", [])
-        for _ in range(m):
-            author = random.choice(users) if random.random() < 0.7 else _rand_username()
-            db["reviews"].append(_fake_review(author))
-
-        db["reviews"] = db["reviews"][-1000:]
-        save_db(db)
-        return m
-
-# ---------- Fake bots & reviews (admin-only seeders) ----------
-
-import random
-
-BOT_NAMES = [
-    "jaime les fucks", "RemiBot", "Hectoro", "VikiVibes", "Johan93", "Paulito",
-    "PixelBaguette", "CroissantKing", "Z3r0x", "ValouTV", "MichelineAI",
-    "Jean-Kevin", "MC_Dojo", "NoScopeNico", "LeFromage", "TchoupiPro",
-    "AnanasSurPizza", "LeRatDuMetro", "BZH_Bot", "CapybaraFR", "Alyx_77",
-    "BerkBerk", "Gigachad_2000", "RNGesus", "MmeTulipe", "ChipsSaveurSel",
-]
-
-FAKE_REVIEW_LINES_FR = [
-    "Jeu super addictif !", "Pas mal, peut mieux faire.", "Incroyable, j’adore.",
-    "Des bugs mais ça passe.", "Très fun entre deux cours.", "Interface propre !",
-    "J’ai reset par erreur… pls help :)", "Le prestige est satisfaisant.",
-    "Boutique équilibrée, c’est cool.", "J’attends la prochaine mise à jour !",
-]
-
-FAKE_REVIEW_LINES_EN = [
-    "Surprisingly addictive!", "Not bad, room to improve.", "I love it!",
-    "Some bugs but still fun.", "Clean UI, nice work.", "Prestige feels good.",
-    "Great for short sessions.", "Shop balance is decent.",
-]
-
-def _rand_username():
-    return random.choice(BOT_NAMES) + (str(random.randint(1, 999)) if random.random() < 0.4 else "")
-
-def _fake_progress():
-    # Roughly log-normal-ish spread so a few are huge, most are small:
-    cps = max(0.0, round(random.expovariate(1/2_000_000) * 1_000_000, 2))  # avg ~2M cps
-    count = max(cps * random.uniform(50, 300), random.uniform(1e3, 1e9))
-    return {
-        "v": 5,
-        "count": float(count),
-        "cps": float(cps),
-        "shop": [],
-        "saved_at": int(time.time()),
-    }
-
-def _fake_review(user):
-    stars = random.choices([5,4,3,2,1], weights=[45,25,15,10,5], k=1)[0]
-    text = random.choice(FAKE_REVIEW_LINES_FR + FAKE_REVIEW_LINES_EN)
-    # small chance to append an emoji or extra bit
-    if random.random() < 0.25:
-        text += " ⭐"
-    return {"u": user[:40] or "Anonymous", "stars": int(stars), "text": text[:800], "ts": int(time.time())}
-
-def seed_bots(n=25, overwrite_existing=False, max_total=200):
-    """
-    Create up to n bot users with fake progress.
-    - overwrite_existing=False: skip names that already exist
-    - max_total: safety cap on total users
-    """
-    with lock:
-        db = load_db()
-        users = db.setdefault("users", {})
-        created = 0
-        if len(users) >= max_total:
-            return 0
-
-        for _ in range(n):
-            name = _rand_username()
-            if (name in users) and not overwrite_existing:
-                continue
-            users[name] = {
-                "pw": generate_password_hash(secrets.token_hex(8)),  # random pw
-                "progress": _fake_progress(),
-                "prestige": _empty_prestige(),
-            }
-            created += 1
-            if len(users) >= max_total:
-                break
-
-        save_db(db)
-        return created
-
-def seed_fake_reviews(m=40):
-    """
-    Append m fake reviews from random names (new or existing).
-    Keeps last 1000 reviews overall (same behavior as /api/reviews).
-    """
-    with lock:
-        db = load_db()
-        users = list((db.get("users") or {}).keys())
-        if not users:
-            users = [ _rand_username() for _ in range(10) ]  # fallback names
-
-        db.setdefault("reviews", [])
-        for _ in range(m):
-            author = random.choice(users) if random.random() < 0.7 else _rand_username()
-            db["reviews"].append(_fake_review(author))
-
-        db["reviews"] = db["reviews"][-1000:]
-        save_db(db)
-        return m
-
-# ---------- Fake bots & reviews (admin-only seeders) ----------
-
-
-import random
-
-BOT_NAMES = [
     "jaime les fucks", "NEGRO", "67", "couilles", "bitesenplastic", "Paulitodu64",
     "autiste tom", "seus", "Z3r0x", "ValouTV", "ta mere la pute",
     "lingam lugigig", "MC_Dojo", "NoScopeNico", "LeFromagedesnoirs", "snap: hector227",
@@ -1508,7 +1318,7 @@ function renderReviews(list){
           ${ME.is_admin ? `<button class="btn red" data-del="${r.ts}">Supprimer</button>` : ``}
         </div>
       </div>
-      <div style="margin-top:6px;white-space:pre-wrap">${(r.text||"").replace(/[<>&]/g, s=>({ "<":"&lt;","&gt;":"&gt;","&":"&amp;" }[s]))}</div>
+      <div style="margin-top:6px;white-space:pre-wrap">${(r.text||"").replace(/[<>&]/g, s => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[s]))}</div>
       <div style="opacity:.7;margin-top:6px;font-size:.85rem">${when} — <span class="pill">ts: ${r.ts}</span></div>
     `;
 
@@ -2121,25 +1931,25 @@ def _collect_leaderboards_simple():
 def api_leaderboard():
     with lock:
         db = load_db()
-        users = db.get("users", {})
+        users = db.get("users", {}) or {}
         rows = []
-
         for name, doc in users.items():
-            prog = doc.get("progress", {})
-            rows.append({
-                "user": name,
-                "count": prog.get("count", 0),
-                "cps": prog.get("cps", 0),
-            })
+            prog = (doc or {}).get("progress") or {}
+            # force numeric types so sorting works even if strings snuck into db.json
+            try:
+                c = float(prog.get("count", 0) or 0)
+            except:
+                c = 0.0
+            try:
+                s = float(prog.get("cps", 0) or 0)
+            except:
+                s = 0.0
+            rows.append({"user": str(name), "count": c, "cps": s})
 
         top_count = sorted(rows, key=lambda x: x["count"], reverse=True)[:50]
         top_cps   = sorted(rows, key=lambda x: x["cps"],   reverse=True)[:50]
 
-    return jsonify({
-        "ok": True,
-        "top_count": top_count,
-        "top_cps": top_cps
-    })
+    return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})
 
 
 @app.get("/leaderboard")
