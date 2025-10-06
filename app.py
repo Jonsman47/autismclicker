@@ -521,38 +521,6 @@ def api_sell_prestige_upgrade():
     return jsonify({"ok": True, "prestige": prest, "refund": refund, "level": up[key]})
 
 
-
-    with lock:
-        db = load_db()
-        u = session.get("user")
-        if not u or u not in db["users"]:
-            return jsonify({"ok": False, "err": "user_missing"}), 400
-        doc = db["users"][u]
-        prest = doc.get("prestige") or _empty_prestige()
-        up = prest.get("up") or {}
-
-        # find def + current level
-        defn = next((d for d in PRESTIGE_UPGRADES if d["key"] == key), None)
-        if not defn:
-            return jsonify({"ok": False, "err": "bad_key"}), 400
-        cur = int(up.get(key, 0))
-        if cur >= defn["max"]:
-            return jsonify({"ok": False, "err": "maxed"}), 400
-
-        cost = _prestige_cost(key, cur + 1)
-        if prest.get("tryz", 0) < cost:
-            return jsonify({"ok": False, "err": "no_funds", "need": cost}), 400
-
-        # buy
-        prest["tryz"] -= cost
-        up[key] = cur + 1
-        prest["up"] = up
-        doc["prestige"] = prest
-        save_db(db)
-
-    return jsonify({"ok": True, "prestige": prest, "cost": cost, "level": up[key]})
-
-
 def _empty_progress():
     return {
         "v": 1,
@@ -681,7 +649,7 @@ def api_update_shop():
 def api_load_shop():
     with lock:
         db = load_db()
-        shop = db.get("settings", {}).get("shop", DEFAULT_SHOP)  # Use the saved shop, or default
+        shop = (db.get("settings", {}) or {}).get("shop") or []
     return jsonify({"ok": True, "shop": shop})
 
 
@@ -2115,8 +2083,7 @@ recalc();
 render();
 loadUpdateBox();
 loadReviewSummary();
-await loadMe();
-loadReviews();
+loadMe().then(loadReviews);  // ← chaîné
 awaitPrestige().then(()=>{
   // apply start boost only if fresh (local count==0 and no shop levels)
   const anyLvl = shop.some(s=> (s.lvl||0) > 0);
