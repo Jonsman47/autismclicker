@@ -17,7 +17,12 @@ ALLOWED_EXT = {"png","jpg","jpeg","webp","gif","svg"}
 
 # ---------- tiny JSON "DB" ----------
 def _empty_db():
-    return {"users": {}, "settings": {"bg": None, "logo": None}}
+    return {
+        "users": {},
+        "settings": {"bg": None, "logo": None, "update": ""},  # + update note
+        "reviews": []  # [{u, stars, text, ts}]
+    }
+
 
 def load_db():
     if not os.path.exists(DB_PATH):
@@ -27,6 +32,8 @@ def load_db():
             db = json.load(f)
             db.setdefault("settings", {"bg": None, "logo": None})
             db.setdefault("users", {})
+            db.setdefault("reviews", [])
+            db.setdefault("settings", {}).setdefault("update", "")
             return db
     except:
         return _empty_db()
@@ -302,6 +309,13 @@ def home():
       .pill{{padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#10101a;color:#cfcfe8}}
     </style>
     <div class="container">
+          <div class="card">
+        <h2 style="margin-top:0">Public Update Note</h2>
+        <form method="post" action="/admin/set_update" class="grid" style="grid-template-columns:1fr">
+          <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:" style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">%s</textarea>
+          <div><button class="btn ok">Save Update</button></div>
+        </form>
+      </div>
       <div class="row" style="justify-content:space-between;margin-bottom:16px">
         <div class="row">
           <a class="btn solid" href="/clicker">🎮 {T('goto_clicker')}</a>
@@ -680,6 +694,77 @@ def api_settings():
         return url_for("serve_upload", filename=os.path.basename(url), _external=False) if url else None
     return jsonify({"ok": True, "settings": {"bg": full(st.get("bg")), "logo": full(st.get("logo"))}})
 
+# ---------- Reviews ----------
+def _sanitize_review(r):
+    # ensure structure and clamp values
+    u = str(r.get("u") or "").strip()[:40]
+    stars = int(r.get("stars") or 0)
+    stars = max(1, min(5, stars))
+    text = str(r.get("text") or "").strip()[:800]
+    return {"u": u or "Anonymous", "stars": stars, "text": text, "ts": int(time.time())}
+
+@app.get("/api/reviews")
+def api_reviews_list():
+    with lock:
+        db = load_db()
+        items = list(reversed(db.get("reviews", [])))[:100]  # newest first, cap 100
+    return jsonify({"ok": True, "reviews": items})
+
+@app.get("/api/reviews/summary")
+def api_reviews_summary():
+    with lock:
+        db = load_db()
+        arr = db.get("reviews", [])
+        n = len(arr)
+        s = sum(x.get("stars", 0) for x in arr)
+    avg = (s / n) if n else 0.0
+    return jsonify({"ok": True, "count": n, "sum": s, "avg": round(avg, 2)})
+
+@app.post("/api/reviews")
+def api_reviews_add():
+    data = request.get_json(silent=True) or {}
+    # Require at least a comment or stars
+    try:
+        stars = int(data.get("stars", 0))
+    except:
+        stars = 0
+    text = (data.get("text") or "").strip()
+    if stars < 1 or stars > 5:
+        return jsonify({"ok": False, "err": "stars_1_5"}), 400
+    if not text:
+        return jsonify({"ok": False, "err": "empty_text"}), 400
+
+    with lock:
+        db = load_db()
+        u = session.get("user") or "Guest"
+        doc = _sanitize_review({"u": u, "stars": stars, "text": text})
+        # Keep only last 1000 reviews
+        db.setdefault("reviews", []).append(doc)
+        db["reviews"] = db["reviews"][-1000:]
+        save_db(db)
+    return jsonify({"ok": True, "review": doc})
+
+# ---------- Public Update Note ----------
+@app.get("/api/update")
+def api_get_update():
+    with lock:
+        db = load_db()
+        txt = (db.get("settings", {}) or {}).get("update", "") or ""
+    return jsonify({"ok": True, "update": txt})
+
+@app.post("/admin/set_update")
+def admin_set_update():
+    if not is_admin():
+        return "Forbidden", 403
+    txt = (request.form.get("update") or "").strip()[:5000]
+    with lock:
+        db = load_db()
+        db.setdefault("settings", {}).setdefault("update", "")
+        db["settings"]["update"] = txt
+        save_db(db)
+    return redirect("/admin")
+
+
 # ---------- Uploads ----------
 @app.get("/uploads/<path:filename>")
 def serve_upload(filename):
@@ -924,6 +1009,18 @@ def clicker():
 
   <h1 id="title" style="text-align:center;margin:10px 0;letter-spacing:.5px;text-shadow:0 0 18px rgba(124,58,237,.35)">Autists Clicker</h1>
 
+    <!-- Public Update box -->
+  <div id="update_box" class="stat" style="text-align:left;margin:10px 0">
+    <div style="font-weight:700;margin-bottom:6px">Latest Update</div>
+    <div id="update_text" style="white-space:pre-wrap;color:#cfd2ff">Loading…</div>
+  </div>
+
+  <!-- Rating summary -->
+  <div class="stat" style="display:flex;justify-content:center;gap:10px;align-items:center">
+    <div id="rating_summary" style="font-size:18px">⭐ 0.00 — 0 reviews</div>
+  </div>
+
+
   <div class="statgrid">
     <div class="stat"><div class="k">Autists</div><div class="v" id="count">0</div></div>
     <div class="stat"><div class="k">a/s</div><div class="v" id="cps">0</div></div>
@@ -956,6 +1053,26 @@ def clicker():
     </div>
   </div>
 
+  <div id="reviews" style="margin-top:16px;border:1px solid #2b2d4a;border-radius:14px;background:#0f1020;padding:12px">
+    <h3 style="margin:6px 0">Reviews</h3>
+
+    <!-- Submit -->
+    <div style="display:grid;gap:8px;grid-template-columns:120px 1fr auto;align-items:start">
+      <select id="rev_stars" style="padding:10px;border-radius:10px;border:1px solid #2b2d4a;background:#15172b;color:#eee">
+        <option value="5">5 ★</option>
+        <option value="4">4 ★</option>
+        <option value="3">3 ★</option>
+        <option value="2">2 ★</option>
+        <option value="1">1 ★</option>
+      </select>
+      <textarea id="rev_text" rows="3" placeholder="Write a short review (public)" style="width:100%;padding:10px;border-radius:10px;border:1px solid #2b2d4a;background:#15172b;color:#eee"></textarea>
+      <button id="rev_send" class="btn orange">Post</button>
+    </div>
+    <div id="rev_msg" class="pill" style="margin-top:6px">Be nice 🙂</div>
+
+    <!-- List -->
+    <div id="rev_list" style="display:grid;gap:10px;margin-top:12px"></div>
+  </div>
 
 
 
@@ -988,7 +1105,89 @@ function applyLang(){
   const clickBtn=document.getElementById("click");
   if(clickBtn) clickBtn.firstChild.nodeValue = t("click");
   document.getElementById("cps_click").textContent = formatNum(cpsClick);
+  document.getElementById("rev_send").onclick = postReview;
 }
+
+function starRow(n){ return "★".repeat(n) + "☆".repeat(5-n); }
+
+async function loadUpdateBox(){
+  try{
+    const r = await fetch("/api/update", {cache:"no-store"});
+    const j = await r.json();
+    if(j.ok){
+      document.getElementById("update_text").textContent = j.update || "—";
+    }
+  }catch(e){}
+}
+
+async function loadReviewSummary(){
+  try{
+    const r = await fetch("/api/reviews/summary",{cache:"no-store"});
+    const j = await r.json();
+    if(j.ok){
+      const el = document.getElementById("rating_summary");
+      el.textContent = `⭐ ${Number(j.avg||0).toFixed(2)} — ${j.count||0} reviews`;
+    }
+  }catch(e){}
+}
+
+function renderReviews(list){
+  const wrap = document.getElementById("rev_list");
+  wrap.innerHTML = "";
+  if(!list || !list.length){
+    wrap.innerHTML = `<div class="pill" style="justify-self:start">No reviews yet.</div>`;
+    return;
+  }
+  list.forEach(r=>{
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style = "padding:10px;border-radius:12px;background:#121322;border:1px solid #31314a";
+    const when = new Date((r.ts||0)*1000).toLocaleString();
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div style="font-weight:700">${(r.u||"Anonymous")}</div>
+        <div class="pill">${starRow(Number(r.stars)||0)}</div>
+      </div>
+      <div style="margin-top:6px;white-space:pre-wrap">${(r.text||"").replace(/[<>&]/g, s=>({ "<":"&lt;","&gt;":"&gt;","&":"&amp;" }[s]))}</div>
+      <div style="opacity:.7;margin-top:6px;font-size:.85rem">${when}</div>
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+async function loadReviews(){
+  try{
+    const r = await fetch("/api/reviews",{cache:"no-store"});
+    const j = await r.json();
+    if(j.ok){ renderReviews(j.reviews||[]); }
+  }catch(e){}
+}
+
+async function postReview(){
+  const stars = Number(document.getElementById("rev_stars").value);
+  const text  = (document.getElementById("rev_text").value||"").trim();
+  const msg   = document.getElementById("rev_msg");
+  if(!text){ msg.textContent = "Please write something."; return; }
+  try{
+    const r = await fetch("/api/reviews",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({stars, text})
+    });
+    const j = await r.json();
+    if(j.ok){
+      document.getElementById("rev_text").value = "";
+      msg.textContent = "Thanks for the review!";
+      await loadReviewSummary();
+      await loadReviews();
+    }else{
+      msg.textContent = j.err || "Error";
+    }
+  }catch(e){
+    msg.textContent = "Network error";
+  }
+}
+
 
 // ===== SHOP DATA =====
 const mk = (name, key, base, inc) => ({ key, name, base, inc, lvl: 0 });
@@ -1485,6 +1684,9 @@ applySettings();
 loadLocal();
 recalc();
 render();
+loadUpdateBox();
+loadReviewSummary();
+loadReviews();
 awaitPrestige().then(()=>{
   // apply start boost only if fresh (local count==0 and no shop levels)
   const anyLvl = shop.some(s=> (s.lvl||0) > 0);
