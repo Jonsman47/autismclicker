@@ -435,6 +435,78 @@ def api_buy_prestige_upgrade():
         return jsonify({"ok": False, "err": "not_auth"}), 401
     data = request.get_json(silent=True) or {}
     key = (data.get("key") or "").strip()
+    if not key:
+        return jsonify({"ok": False, "err": "missing_key"}), 400
+
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        if not u or u not in db["users"]:
+            return jsonify({"ok": False, "err": "user_missing"}), 400
+        doc = db["users"][u]
+        prest = doc.get("prestige") or _empty_prestige()
+        up = prest.get("up") or {}
+
+        defn = next((d for d in PRESTIGE_UPGRADES if d["key"] == key), None)
+        if not defn:
+            return jsonify({"ok": False, "err": "bad_key"}), 400
+
+        cur = int(up.get(key, 0))
+        if cur >= defn["max"]:
+            return jsonify({"ok": False, "err": "maxed"}), 400
+
+        cost = _prestige_cost(key, cur + 1)
+        if prest.get("tryz", 0) < cost:
+            return jsonify({"ok": False, "err": "no_funds", "need": cost}), 400
+
+        prest["tryz"] -= cost
+        up[key] = cur + 1
+        prest["up"] = up
+        doc["prestige"] = prest
+        save_db(db)
+
+    return jsonify({"ok": True, "prestige": prest, "cost": cost, "level": up[key]})
+
+@app.post("/api/sell_prestige_upgrade")
+def api_sell_prestige_upgrade():
+    if not is_authed():
+        return jsonify({"ok": False, "err": "not_auth"}), 401
+
+    data = request.get_json(silent=True) or {}
+    key = (data.get("key") or "").strip()
+    if not key:
+        return jsonify({"ok": False, "err": "missing_key"}), 400
+
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        if not u or u not in db["users"]:
+            return jsonify({"ok": False, "err": "user_missing"}), 400
+
+        doc = db["users"][u]
+        prest = doc.get("prestige") or _empty_prestige()
+        up = prest.get("up") or {}
+
+        defn = next((d for d in PRESTIGE_UPGRADES if d["key"] == key), None)
+        if not defn:
+            return jsonify({"ok": False, "err": "bad_key"}), 400
+
+        cur = int(up.get(key, 0))
+        if cur <= 0:
+            return jsonify({"ok": False, "err": "no_level"}), 400
+
+        total_spent = sum(_prestige_cost(key, i) for i in range(1, cur + 1))
+        refund = int(total_spent * 0.50)
+
+        prest["tryz"] = int(prest.get("tryz", 0)) + refund
+        up[key] = cur - 1
+        prest["up"] = up
+        doc["prestige"] = prest
+        save_db(db)
+
+    return jsonify({"ok": True, "prestige": prest, "refund": refund, "level": up[key]})
+
+
 
     with lock:
         db = load_db()
@@ -485,17 +557,16 @@ def _empty_prestige():
 
 # server-side canonical prestige upgrades (validate + pricing)
 PRESTIGE_UPGRADES = [
-    {"key": "cps_mult",     "name": "Passive a/s x1.10/level",  "base": 5, "max": 50},
-    {"key": "click_mult",   "name": "Click power x1.25/level",  "base": 3, "max": 20},
-    {"key": "start_boost",  "name": "Start +10k/level",         "base": 2, "max": 10},
-
-    # NEW ↓
-    {"key": "asc_mult",       "name": "Ascend yield +10%/level",    "base": 4, "max": 50},
-    {"key": "shop_discount",  "name": "Shop prices -2%/level",      "base": 3, "max": 50},   # hard cap 50% in client
-    {"key": "flat_cps",       "name": "+100 a/s per level",         "base": 2, "max": 200},
-    {"key": "refund_plus",    "name": "Sell refund +5%/level",      "base": 2, "max": 9},    # base 50% → max 95%
-    {"key": "lucky_clicks",   "name": "Crit click +5%/lvl (x3)",    "base": 5, "max": 15},   # cap 75% in client
+    {"key": "cps_mult",     "name": "Passive a/s x1.10/level",  "base": 1_000_000_000, "max": 50},     # 1B
+    {"key": "click_mult",   "name": "Click power x1.25/level",  "base": 10_000_000_000, "max": 20},    # 10B
+    {"key": "start_boost",  "name": "Start +10k/level",         "base": 50_000_000_000, "max": 10},    # 50B
+    {"key": "asc_mult",     "name": "Ascend yield +10%/level",  "base": 100_000_000_000, "max": 50},   # 100B
+    {"key": "shop_discount", "name": "Shop prices -2%/level",   "base": 500_000_000_000, "max": 50},   # 500B
+    {"key": "flat_cps",     "name": "+100 a/s per level",       "base": 1_000_000_000_000, "max": 200},# 1T
+    {"key": "refund_plus",  "name": "Sell refund +5%/level",    "base": 10_000_000_000_000, "max": 9}, # 10T
+    {"key": "lucky_clicks", "name": "Crit click +5%/lvl (x3)",  "base": 1_000_000_000_000_000, "max": 15}, # 1Qa
 ]
+
 
 def _prestige_cost(key, lvl_next):
     # lvl_next starts at 1 for first buy
@@ -545,7 +616,6 @@ def api_save_progress():
 
 
 
-@app.get("/api/load_progress")
 @app.get("/api/load_progress")
 def api_load_progress():
     if not is_authed():
@@ -1324,10 +1394,38 @@ function renderPrestigeShop(){
         }
       }catch(e){}
     };
-
+  // Add Sell (50%) button if level > 0
+if (lvl > 0) {
+  const sellBtn = document.createElement("button");
+  sellBtn.className = "btn red";
+  sellBtn.textContent = "Sell (50%)";
+  sellBtn.onclick = async () => {
+    try {
+      const r = await fetch("/api/sell_prestige_upgrade", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({key: def.key})
+      });
+      const j = await r.json();
+      if (j.ok) {
+        prestige = j.prestige || prestige;
+        recalc(); update(); renderPrestigeShop(); saveLocal();
+      } else {
+        alert(j.err || "Sell failed");
+      }
+    } catch (e) {
+      alert("Sell error");
+    }
+  };
+  // place it next to the buy button (right side)
+  const controls = row.lastElementChild; // right-side controls
+  controls.appendChild(sellBtn);
+}
     wrap.appendChild(row);
   });
 }
+
+
 
 document.getElementById("btn_ascend").onclick = async ()=>{
   const est = Math.floor(((cps||0)/1_000_000) * ascMult());
