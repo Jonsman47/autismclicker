@@ -901,19 +901,21 @@ def admin_panel():
   <p class="pill" id="rev_del_msg">Entre le timestamp exact (fourni dans /api/reviews ou DB)</p>
 </div>
 
-        <script>
-        async function deleteReview(e){
-          e.preventDefault();
-          const ts = document.getElementById("rev_ts").value;
-          const res = await fetch("/admin/delete_review", {
-            method: "POST",
-            headers: {"Content-Type": "application/x-www-form-urlencoded"},
-            body: "ts=" + encodeURIComponent(ts)
-          });
-          const j = await res.json().catch(()=>({}));
-          document.getElementById("rev_del_msg").textContent = j.ok ? "Supprimé ✓" : "Erreur";
-        }
-        </script>
+<script>
+async function deleteReview(e){{   // <-- {{ }}
+  e.preventDefault();
+  const ts = document.getElementById("rev_ts").value;
+  const res = await fetch("/admin/delete_review", {{
+    method: "POST",
+    headers: {{"Content-Type": "application/x-www-form-urlencoded"}},  // <-- {{ }}
+    body: "ts=" + encodeURIComponent(ts)
+  }});
+  const j = await res.json().catch(()=>({{}}));
+  document.getElementById("rev_del_msg").textContent = j.ok ? "Supprimé ✓" : "Erreur";
+}}
+</script>
+
+
       </div>
     </div>"""
 
