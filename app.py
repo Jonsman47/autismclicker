@@ -2119,8 +2119,34 @@ def _collect_leaderboards_simple():
 
 @app.get("/api/leaderboard")
 def api_leaderboard():
-    top_count, top_cps = _collect_leaderboards_simple()
-    return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})
+    with lock:
+        db = load_db()
+        users = db.get("users", {})
+        rows = []
+        for name, doc in users.items():
+            prog = (doc.get("progress") or {})
+            cps = prog.get("cps", 0)
+            count = prog.get("count", 0)
+
+            role = None
+            color = None
+
+            # Highlight for creator
+            if name.lower() == "jonsman47":
+                role = "CREATOR"
+                color = "#b24ef5"  # purple
+
+            rows.append({
+                "name": name,
+                "cps": cps,
+                "count": count,
+                "role": role,
+                "color": color,
+            })
+
+        rows.sort(key=lambda x: x["cps"], reverse=True)
+        top = rows[:50]
+    return jsonify({"ok": True, "board": top})
 
 @app.get("/leaderboard")
 def leaderboard_page():
@@ -2141,6 +2167,7 @@ def leaderboard_page():
       @media (min-width:900px){ .grid{grid-template-columns:1fr 1fr} }
       .muted{color:#9aa0a6}
     </style>
+
     <div class="wrap">
       <div class="card" style="display:flex;justify-content:space-between;align-items:center">
         <h1 style="margin:0">Leaderboard</h1>
@@ -2149,6 +2176,7 @@ def leaderboard_page():
           <a class="btn" href="/">← Home</a>
         </div>
       </div>
+
       <div class="grid">
         <div class="card">
           <h2 style="margin:0 0 8px 0">Most Autists (current)</h2>
@@ -2159,8 +2187,10 @@ def leaderboard_page():
           <table id="tbl_cps"><thead><tr><th>#</th><th>User</th><th>a/s</th></tr></thead><tbody></tbody></table>
         </div>
       </div>
+
       <div class="card muted">Auto-updates every 60s.</div>
     </div>
+
     <script>
       function fmt(n){
         n = Number(n)||0;
@@ -2176,18 +2206,34 @@ def leaderboard_page():
         }
         return String(Math.trunc(n));
       }
+
       function renderTable(tbody, rows, key){
         tbody.innerHTML = '';
         if(!rows || !rows.length){
           tbody.innerHTML = '<tr><td colspan="3" class="muted">Empty</td></tr>';
           return;
         }
+
         rows.forEach((r,i)=>{
           const tr = document.createElement('tr');
-          tr.innerHTML = '<td>'+(i+1)+'</td><td>'+r.user+'</td><td>'+fmt(r[key])+'</td>';
+          let name = r.user;
+          let badge = '';
+
+          // Highlight Creator
+          if (name && name.toLowerCase() === 'jonsman47') {
+            name = `<span style="color:#b24ef5;font-weight:700">${name}</span>`;
+            badge = ` <span style="font-size:0.75rem;background:#b24ef5;color:#fff;padding:2px 6px;border-radius:6px;margin-left:6px;">CREATOR</span>`;
+          }
+
+          tr.innerHTML = `
+            <td>${i+1}</td>
+            <td>${name}${badge}</td>
+            <td>${fmt(r[key])}</td>
+          `;
           tbody.appendChild(tr);
         });
       }
+
       async function loadLB(){
         try{
           const r = await fetch('/api/leaderboard',{cache:'no-store'});
@@ -2197,8 +2243,9 @@ def leaderboard_page():
             renderTable(document.querySelector('#tbl_cps tbody'),   j.top_cps,   'cps');
             document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
           }
-        }catch(e){}
+        }catch(e){ console.error(e); }
       }
+
       loadLB();
       setInterval(loadLB, 60000);
     </script>
