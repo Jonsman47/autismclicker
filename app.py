@@ -892,6 +892,29 @@ def admin_panel():
           <thead><tr><th>{T('users')}</th><th>{T('actions')}</th></tr></thead>
           <tbody>{table}</tbody>
         </table>
+        <div class="card">
+  <h2 style="margin-top:0">Gérer les commentaires</h2>
+  <form onsubmit="deleteReview(event)" class="act" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input name="ts" id="rev_ts" placeholder="Timestamp du commentaire" required>
+    <button class="btn warn">Supprimer le commentaire</button>
+  </form>
+  <p class="pill" id="rev_del_msg">Entre le timestamp exact (fourni dans /api/reviews ou DB)</p>
+</div>
+
+<script>
+async function deleteReview(e){
+  e.preventDefault();
+  const ts = document.getElementById("rev_ts").value;
+  const res = await fetch("/admin/delete_review", {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: "ts=" + encodeURIComponent(ts)
+  });
+  const j = await res.json().catch(()=>({}));
+  document.getElementById("rev_del_msg").textContent = j.ok ? "Supprimé ✓" : "Erreur";
+}
+</script>
+
       </div>
     </div>"""
 
@@ -1289,6 +1312,29 @@ def admin_seed_reviews():
         m = 40
     made = seed_fake_reviews(m=m)
     return jsonify({"ok": True, "created": made})
+
+# ---------- Admin: Delete reviews ----------
+@app.post("/admin/delete_review")
+def admin_delete_review():
+    if not is_admin():
+        return "Forbidden", 403
+
+    try:
+        ts = int(request.form.get("ts", "0"))  # timestamp unique du commentaire
+    except:
+        return "Bad timestamp", 400
+
+    with lock:
+        db = load_db()
+        reviews = db.get("reviews", [])
+        before = len(reviews)
+        reviews = [r for r in reviews if int(r.get("ts", 0)) != ts]
+        db["reviews"] = reviews[-1000:]  # garder max 1000
+        save_db(db)
+        after = len(reviews)
+
+    return jsonify({"ok": True, "deleted": before - after})
+
 
 # ---------- Clicker ----------
 @app.get("/clicker")
