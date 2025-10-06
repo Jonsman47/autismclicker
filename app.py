@@ -1337,6 +1337,16 @@ def admin_delete_review():
     return jsonify({"ok": True, "deleted": before - after})
 
 
+@app.get("/api/me")
+def api_me():
+    return jsonify({
+        "ok": True,
+        "user": session.get("user"),
+        "is_admin": is_admin()
+    })
+
+
+
 # ---------- Clicker ----------
 @app.get("/clicker")
 def clicker():
@@ -1431,6 +1441,9 @@ def clicker():
     </div>
   </div>
 
+  <h2 id="lbl_shop" style="text-align:center;margin-top:8px">Shop</h2>
+  <div id="shop" style="display:grid;gap:12px;grid-template-columns:1fr;"></div>
+  
   <div id="reviews" style="margin-top:16px;border:1px solid #2b2d4a;border-radius:14px;background:#0f1020;padding:12px">
     <h3 style="margin:6px 0">Reviews</h3>
 
@@ -1452,11 +1465,7 @@ def clicker():
     <div id="rev_list" style="display:grid;gap:10px;margin-top:12px"></div>
   </div>
 
-
-
-  <h2 id="lbl_shop" style="text-align:center;margin-top:8px">Shop</h2>
-  <div id="shop" style="display:grid;gap:12px;grid-template-columns:1fr;"></div>
-
+  
   <div id="custom" style="margin-top:16px;border:1px dashed #34345a;padding:12px;border-radius:12px;background:#11121f">
     <h3 id="lbl_create" style="text-align:center">Create custom Autist (cost: 1000)</h3>
     <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr auto">
@@ -1521,17 +1530,46 @@ function renderReviews(list){
     card.className = "card";
     card.style = "padding:10px;border-radius:12px;background:#121322;border:1px solid #31314a";
     const when = new Date((r.ts||0)*1000).toLocaleString();
+    const stars = Number(r.stars)||0;
+
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
         <div style="font-weight:700">${(r.u||"Anonymous")}</div>
-        <div class="pill">${starRow(Number(r.stars)||0)}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="pill">${"★".repeat(stars) + "☆".repeat(5-stars)}</div>
+          ${ME.is_admin ? `<button class="btn red" data-del="${r.ts}">Supprimer</button>` : ``}
+        </div>
       </div>
       <div style="margin-top:6px;white-space:pre-wrap">${(r.text||"").replace(/[<>&]/g, s=>({ "<":"&lt;","&gt;":"&gt;","&":"&amp;" }[s]))}</div>
-      <div style="opacity:.7;margin-top:6px;font-size:.85rem">${when}</div>
+      <div style="opacity:.7;margin-top:6px;font-size:.85rem">${when} — <span class="pill">ts: ${r.ts}</span></div>
     `;
+
+    if (ME.is_admin){
+      const btn = card.querySelector(`[data-del="${r.ts}"]`);
+      btn.onclick = async ()=>{
+        try{
+          const res = await fetch("/admin/delete_review", {
+            method: "POST",
+            headers: {"Content-Type": "application/x-www-form-urlencoded"},
+            body: "ts=" + encodeURIComponent(r.ts)
+          });
+          const j = await res.json().catch(()=>({}));
+          if(j && j.ok){
+            card.remove();            // retire visuellement
+            loadReviewSummary();      // maj moyenne & compteur
+          }else{
+            alert("Suppression impossible");
+          }
+        }catch(e){
+          alert("Erreur réseau");
+        }
+      };
+    }
+
     wrap.appendChild(card);
   });
 }
+
 
 async function loadReviews(){
   try{
@@ -2055,6 +2093,19 @@ async function applySettings(){
   }catch(e){}
 }
 
+let ME = { is_admin: false, user: null };
+
+async function loadMe(){
+  try{
+    const r = await fetch("/api/me", {cache:"no-store"});
+    const j = await r.json();
+    if(j && j.ok){
+      ME = { is_admin: !!j.is_admin, user: j.user || null };
+    }
+  }catch(e){}
+}
+
+
 // Boot
 setLang("fr");
 applyLang();
@@ -2064,6 +2115,7 @@ recalc();
 render();
 loadUpdateBox();
 loadReviewSummary();
+await loadMe();
 loadReviews();
 awaitPrestige().then(()=>{
   // apply start boost only if fresh (local count==0 and no shop levels)
