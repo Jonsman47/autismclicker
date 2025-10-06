@@ -2123,30 +2123,26 @@ def api_leaderboard():
         db = load_db()
         users = db.get("users", {})
         rows = []
+
         for name, doc in users.items():
-            prog = (doc.get("progress") or {})
-            cps = prog.get("cps", 0)
+            prog = doc.get("progress", {})
             count = prog.get("count", 0)
-
-            role = None
-            color = None
-
-            # Highlight for creator
-            if name.lower() == "jonsman47":
-                role = "CREATOR"
-                color = "#b24ef5"  # purple
-
+            cps = prog.get("cps", 0)
             rows.append({
-                "name": name,
-                "cps": cps,
+                "user": name,
                 "count": count,
-                "role": role,
-                "color": color,
+                "cps": cps,
             })
 
-        rows.sort(key=lambda x: x["cps"], reverse=True)
-        top = rows[:50]
-    return jsonify({"ok": True, "board": top})
+        # sort by count and cps separately
+        top_count = sorted(rows, key=lambda x: x["count"], reverse=True)[:50]
+        top_cps = sorted(rows, key=lambda x: x["cps"], reverse=True)[:50]
+
+    return jsonify({
+        "ok": True,
+        "top_count": top_count,
+        "top_cps": top_cps
+    })
 
 @app.get("/leaderboard")
 def leaderboard_page():
