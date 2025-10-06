@@ -1,5 +1,19 @@
 {
-  "users": {},
+  "users": {
+    "Jonsman47": {
+      "pw": "scrypt:32768:8:1$sU496aL7l76xcOg3$caa1672bf9314f158fcc838c87c6f37dbf993bde806103b57773d0a96242f2cb4269b8283c6b729cd0dc78d1aabbc63922636f7f13be75a7a284041422167639",
+      "progress": {
+        "count": 1e+16,
+        "cps": 0,
+        "shop": []
+      },
+      "prestige": {
+        "tryz": 0,
+        "asc": 0,
+        "up": {}
+      }
+    }
+  },
   "settings": {
     "bg": null,
     "logo": null

@@ -192,7 +192,11 @@ def register_post():
     with lock:
         db = load_db()
         if u in db["users"]: return "Username taken", 400
-        db["users"][u] = {"pw": generate_password_hash(p), "progress": None}
+        db["users"][u] = {
+    "pw": generate_password_hash(p),
+    "progress": None,
+    "prestige": _empty_prestige()
+}
         save_db(db)
     session["user"] = u
     return redirect("/")
@@ -344,6 +348,8 @@ def home():
     </div>"""
 
 # ---------- API: save/load + settings ----------
+
+
 def _sanitize_shop(items):
     safe = []
     if not isinstance(items, list):
@@ -374,6 +380,93 @@ def _sanitize_shop(items):
         })
     return safe
 
+@app.get("/api/prestige")
+def api_get_prestige():
+    if not is_authed():
+        return jsonify({"ok": False, "err": "not_auth"}), 401
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        if not u or u not in db["users"]:
+            return jsonify({"ok": False, "err": "user_missing"}), 400
+        p = db["users"][u].get("prestige") or _empty_prestige()
+    return jsonify({"ok": True, "prestige": p, "upgrades": PRESTIGE_UPGRADES})
+
+@app.post("/api/ascend")
+def api_ascend():
+    if not is_authed():
+        return jsonify({"ok": False, "err": "not_auth"}), 401
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        if not u or u not in db["users"]:
+            return jsonify({"ok": False, "err": "user_missing"}), 400
+
+        doc = db["users"][u]
+        prog = (doc.get("progress") or _empty_progress())
+        cps_now = float(prog.get("cps") or 0.0)
+
+        prest = doc.get("prestige") or _empty_prestige()
+        asc_lvl = int((prest.get("up") or {}).get("asc_mult", 0))
+        mult = 1.0 + 0.10 * asc_lvl
+        award = int((cps_now / 1_000_000) * mult)
+  # 1 tryz / 1,000,000 a/s
+        if award <= 0:
+            return jsonify({"ok": False, "err": "too_low", "need": 1_000_000}), 400
+
+        # grant currency + increment asc count
+        prest = doc.get("prestige") or _empty_prestige()
+        prest["tryz"] = int(prest.get("tryz", 0)) + award
+        prest["asc"]  = int(prest.get("asc", 0)) + 1
+        doc["prestige"] = prest
+
+        # reset progress to clean slate (server-controlled)
+        fresh = _empty_progress()
+        fresh["saved_at"] = int(time.time())
+        doc["progress"] = fresh
+
+        save_db(db)
+
+    return jsonify({"ok": True, "award": award, "prestige": prest, "progress": fresh})
+
+@app.post("/api/buy_prestige_upgrade")
+def api_buy_prestige_upgrade():
+    if not is_authed():
+        return jsonify({"ok": False, "err": "not_auth"}), 401
+    data = request.get_json(silent=True) or {}
+    key = (data.get("key") or "").strip()
+
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        if not u or u not in db["users"]:
+            return jsonify({"ok": False, "err": "user_missing"}), 400
+        doc = db["users"][u]
+        prest = doc.get("prestige") or _empty_prestige()
+        up = prest.get("up") or {}
+
+        # find def + current level
+        defn = next((d for d in PRESTIGE_UPGRADES if d["key"] == key), None)
+        if not defn:
+            return jsonify({"ok": False, "err": "bad_key"}), 400
+        cur = int(up.get(key, 0))
+        if cur >= defn["max"]:
+            return jsonify({"ok": False, "err": "maxed"}), 400
+
+        cost = _prestige_cost(key, cur + 1)
+        if prest.get("tryz", 0) < cost:
+            return jsonify({"ok": False, "err": "no_funds", "need": cost}), 400
+
+        # buy
+        prest["tryz"] -= cost
+        up[key] = cur + 1
+        prest["up"] = up
+        doc["prestige"] = prest
+        save_db(db)
+
+    return jsonify({"ok": True, "prestige": prest, "cost": cost, "level": up[key]})
+
+
 def _empty_progress():
     return {
         "v": 1,
@@ -382,6 +475,35 @@ def _empty_progress():
         "shop": [],
         "saved_at": None,
     }
+
+def _empty_prestige():
+    return {
+        "tryz": 0,            # prestige currency
+        "asc": 0,             # number of ascensions
+        "up": {}              # upgrades: {key: lvl}
+    }
+
+# server-side canonical prestige upgrades (validate + pricing)
+PRESTIGE_UPGRADES = [
+    {"key": "cps_mult",     "name": "Passive a/s x1.10/level",  "base": 5, "max": 50},
+    {"key": "click_mult",   "name": "Click power x1.25/level",  "base": 3, "max": 20},
+    {"key": "start_boost",  "name": "Start +10k/level",         "base": 2, "max": 10},
+
+    # NEW ↓
+    {"key": "asc_mult",       "name": "Ascend yield +10%/level",    "base": 4, "max": 50},
+    {"key": "shop_discount",  "name": "Shop prices -2%/level",      "base": 3, "max": 50},   # hard cap 50% in client
+    {"key": "flat_cps",       "name": "+100 a/s per level",         "base": 2, "max": 200},
+    {"key": "refund_plus",    "name": "Sell refund +5%/level",      "base": 2, "max": 9},    # base 50% → max 95%
+    {"key": "lucky_clicks",   "name": "Crit click +5%/lvl (x3)",    "base": 5, "max": 15},   # cap 75% in client
+]
+
+def _prestige_cost(key, lvl_next):
+    # lvl_next starts at 1 for first buy
+    for u in PRESTIGE_UPGRADES:
+        if u["key"] == key:
+            return int(u["base"] * lvl_next)  # simple linear scale
+    return 999999999
+
 
 @app.post("/api/save_progress")
 def api_save_progress():
@@ -421,6 +543,9 @@ def api_save_progress():
 
     return jsonify({"ok": True})
 
+
+
+@app.get("/api/load_progress")
 @app.get("/api/load_progress")
 def api_load_progress():
     if not is_authed():
@@ -429,6 +554,11 @@ def api_load_progress():
     with lock:
         db = load_db()
         u = session.get("user")
+        if u and u in db.get("users", {}):
+            # ensure prestige exists for existing accounts
+            db["users"][u].setdefault("prestige", _empty_prestige())
+            save_db(db)
+
         base = _empty_progress()
         if not u or u not in db.get("users", {}):
             return jsonify({"ok": True, "progress": base})
@@ -443,6 +573,33 @@ def api_load_progress():
         }
 
     return jsonify({"ok": True, "progress": prog})
+
+
+@app.post("/api/update_shop")
+def api_update_shop():
+    if not is_admin():  # Only allow admins to update the shop
+        return jsonify({"ok": False, "err": "Forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+
+    if "shop" not in data:
+        return jsonify({"ok": False, "err": "Missing shop data"}), 400
+
+    # Save the updated shop data in the database
+    with lock:
+        db = load_db()
+        db["settings"]["shop"] = data["shop"]
+        save_db(db)
+
+    return jsonify({"ok": True})
+
+@app.get("/api/load_shop")
+def api_load_shop():
+    with lock:
+        db = load_db()
+        shop = db.get("settings", {}).get("shop", DEFAULT_SHOP)  # Use the saved shop, or default
+    return jsonify({"ok": True, "shop": shop})
+
 
 @app.get("/api/settings")
 def api_settings():
@@ -715,6 +872,23 @@ def clicker():
     <span id="sync_msg" class="pill">…</span>
   </div>
 
+    <div id="prestige" style="margin:12px 0;padding:12px;border:1px solid #2b2d4a;border-radius:14px;background:#0f1020">
+    <div class="row" style="justify-content:space-between;gap:8px;align-items:center">
+      <div>
+        <b>Prestige — Tryzomiques:</b> <span id="tryz_bal">0</span>
+        <span class="pill" style="margin-left:8px">If Ascend now: +<span id="tryz_est">0</span></span>
+      </div>
+      <button id="btn_ascend" class="btn red">Ascend (reset, keep upgrades)</button>
+    </div>
+    <div style="margin-top:12px">
+      <h3 style="margin:6px 0">Prestige Upgrades</h3>
+      <div id="prestige_shop" style="display:grid;gap:10px"></div>
+    </div>
+  </div>
+
+
+
+
   <h2 id="lbl_shop" style="text-align:center;margin-top:8px">Shop</h2>
   <div id="shop" style="display:grid;gap:12px;grid-template-columns:1fr;"></div>
 
@@ -821,9 +995,99 @@ const DEFAULT_SHOP = [
   ...megaUnits
 ];
 
+// Load the shop data from the server
+async function loadShopData() {
+    try {
+        const response = await fetch("/api/load_shop");
+        const data = await response.json();
+
+        if (data.ok && data.shop) {
+            // Update the local shop with the new data
+            shop = data.shop;
+            renderShop();  // Re-render the shop with updated data
+        }
+    } catch (error) {
+        console.error("Error fetching shop data:", error);
+    }
+}
+
+
 
 // ===== STATE & SAVE =====
 let count = 0, cps = 0;
+// Prestige (server-authoritative)
+let prestige = { tryz: 0, asc: 0, up: {} };
+let prestigeDefs = []; // from server
+
+function prestigeGet(key){ return Number((prestige.up||{})[key]||0); }
+function prestigeMultCps(){
+  const lvl = prestigeGet("cps_mult");
+  return Math.pow(1.10, lvl); // +10% per lvl
+}
+function prestigeMultClick(){
+  const lvl = prestigeGet("click_mult");
+  return Math.pow(1.25, lvl); // +25% per lvl
+}
+function prestigeStartBoost(){
+  const lvl = prestigeGet("start_boost");
+  return 10000 * lvl;
+}
+function updateTryzEst(){
+  const est = Math.floor(((cps||0) / 1_000_000) * ascMult());
+  document.getElementById("tryz_est").textContent = est;
+}
+function ascMult(){ return 1 + 0.10 * prestigeGet("asc_mult"); }
+function shopDiscount(){ return Math.min(0.02 * prestigeGet("shop_discount"), 0.50); } // max 50%
+function flatCps(){ return 100 * prestigeGet("flat_cps"); }
+function refundRate(){ return Math.min(0.50 + 0.05 * prestigeGet("refund_plus"), 0.95); } // base 50%
+function critChance(){ return Math.min(0.05 * prestigeGet("lucky_clicks"), 0.75); } // max 75%
+function critMult(){ return 3; }
+function pct(n){ return Math.round(n) + "%"; }
+
+const PRESTIGE_TEXT = {
+  cps_mult: (lvl)=> {
+    const now  = Math.pow(1.10, lvl);
+    const next = Math.pow(1.10, lvl+1);
+    return `Passive a/s: x${now.toFixed(2)} ➜ x${next.toFixed(2)} (+10%/lvl)`;
+  },
+  click_mult: (lvl)=> {
+    const now  = Math.pow(1.25, lvl);
+    const next = Math.pow(1.25, lvl+1);
+    return `Click power: x${now.toFixed(2)} ➜ x${next.toFixed(2)} (+25%/lvl)`;
+  },
+  start_boost: (lvl)=> {
+    const now  = 10000*lvl;
+    const next = 10000*(lvl+1);
+    return `Start bonus: +${formatNum(now)} ➜ +${formatNum(next)} (+10k/lvl)`;
+  },
+  asc_mult: (lvl)=> {
+    const now  = 10*lvl;
+    const next = 10*(lvl+1);
+    return `Ascend yield: +${now}% ➜ +${next}% (+10%/lvl)`;
+  },
+  shop_discount: (lvl)=> {
+    const now  = Math.min(2*lvl,50);
+    const next = Math.min(2*(lvl+1),50);
+    return `Shop prices: -${now}% ➜ -${next}% (cap 50%)`;
+  },
+  flat_cps: (lvl)=> {
+    const now  = 100*lvl;
+    const next = 100*(lvl+1);
+    return `Flat a/s: +${formatNum(now)} ➜ +${formatNum(next)} (+100/lvl)`;
+  },
+  refund_plus: (lvl)=> {
+    const now  = Math.min(50 + 5*lvl, 95);
+    const next = Math.min(50 + 5*(lvl+1), 95);
+    return `Sell refund: ${now}% ➜ ${next}% (cap 95%)`;
+  },
+  lucky_clicks: (lvl)=> {
+    const now  = Math.min(5*lvl, 75);
+    const next = Math.min(5*(lvl+1), 75);
+    return `Crit chance: ${now}% ➜ ${next}% (x3 crits)`;
+  },
+};
+
+
 let shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
 
 // Clicks-per-second meter
@@ -832,6 +1096,14 @@ let cpsClick = 0;
 const CPS_WINDOW_MS = 2000;
 
 // ===== UTILS =====
+function addCustom(name, base){
+  const unit = { key:`custom_${Date.now()}`, name, base:Number(base), inc:rndInc(base), lvl:0 };
+  shop.push(unit);
+  count -= 1000;
+  recalc(); saveLocal();
+  return unit;
+}
+
 function formatNum(n){
   n = Number(n)||0;
   const scales = [
@@ -846,9 +1118,16 @@ function formatNum(n){
   }
   return String(Math.trunc(n));
 }
-function costOf(i){ return Math.floor(i.base*Math.pow(1.15,i.lvl)); }
+function costOf(i){
+  const raw = Math.floor(i.base * Math.pow(1.15, i.lvl));
+  const disc = shopDiscount();
+  return Math.max(1, Math.floor(raw * (1 - disc)));
+}
 function effectiveInc(it){ return it.inc; }
-function recalc(){ cps = shop.reduce((s,x)=> s + effectiveInc(x)*(Number(x.lvl)||0), 0); }
+function recalc(){
+  const base = shop.reduce((s,x)=> s + effectiveInc(x)*(Number(x.lvl)||0), 0);
+  cps = Math.max(0, base * prestigeMultCps() + flatCps());
+}
 function rndInc(base){
   if(!base || base<=0) return 1;
   let min = Math.floor(Math.sqrt(base));
@@ -857,7 +1136,10 @@ function rndInc(base){
   const val = min + Math.random()*(max-min);
   return Math.round(val);
 }
-function clickPower(){ return Math.max(1, Math.floor(1 + (cps/1000)*25)); }
+function clickPower(){
+  const base = Math.max(1, Math.floor(1 + (cps/1000)*25));
+  return Math.floor(base * prestigeMultClick());
+}
 function updateClickButton(){
   const btn = document.getElementById("click");
   if (btn) btn.childNodes[0].nodeValue = "+" + formatNum(clickPower());
@@ -906,8 +1188,10 @@ function render(){
     row.className="card";
     const btnStyle = canBuy ? "btn orange" : "btn";
     const sellStyle= canSell ? "btn red" : "btn";
-    const refund = formatNum(Math.floor(price*0.5));
+    const refundPct = refundRate();
+    const refund = formatNum(Math.floor(price * refundPct));
 
+    
     row.innerHTML=`
       <div style="text-align:left">
         <div style="font-size:18px;"><b>${it.name}</b> (+${formatNum(effectiveInc(it))}/s per lvl)</div>
@@ -937,7 +1221,7 @@ function sellItem(i){
   const it = shop[i];
   if(!it || it.lvl<=0) return;
   const price = costOf(it);
-  const refund = Math.floor(price*0.5);
+  const refund = Math.floor(price * refundRate());
   it.lvl -= 1;
   count  += refund;
   recalc(); render(); saveLocal(); updateClickButton();
@@ -947,15 +1231,20 @@ function sellItem(i){
 function update(){
   document.getElementById("count").textContent = formatNum(count);
   document.getElementById("cps").textContent   = formatNum(cps);
+    document.getElementById("tryz_bal").textContent = formatNum(prestige.tryz||0);
+  updateTryzEst();
   render();
   updateClickButton();
 }
 document.getElementById("click").onclick = () => {
-  count += clickPower();
+  let add = clickPower();
+  if (Math.random() < critChance()) add = Math.floor(add * critMult());
+  count += add;
   pushClick();
   update();
   saveLocal();
 };
+
 
 document.getElementById("c_make").onclick=()=>{
   const name=(document.getElementById("c_name").value||"").trim();
@@ -982,6 +1271,87 @@ async function loadServer(){
     update(); saveLocal(); document.getElementById("sync_msg").textContent="✓";
   } else { document.getElementById("sync_msg").textContent="x"; }
 }
+
+async function awaitPrestige(){
+  try{
+    const r = await fetch("/api/prestige",{cache:"no-store"});
+    const j = await r.json();
+    if(j.ok){
+      prestige = j.prestige || prestige;
+      prestigeDefs = j.upgrades || [];
+      renderPrestigeShop();
+    }
+  }catch(e){}
+}
+
+function renderPrestigeShop(){
+  const wrap = document.getElementById("prestige_shop");
+  wrap.innerHTML = "";
+
+  prestigeDefs.forEach(def=>{
+    const lvl  = prestigeGet(def.key);
+    const next = lvl + 1;
+    const cost = def.base * next;
+    const can  = (prestige.tryz||0) >= cost && lvl < def.max;
+    const desc = (PRESTIGE_TEXT[def.key]?.(lvl)) || def.name;
+
+    const row = document.createElement("div");
+    row.className = "card";
+    row.style = "display:flex;justify-content:space-between;align-items:center;border:1px solid #31314a;padding:12px;border-radius:12px;background:#121322;gap:8px";
+
+    row.innerHTML = `
+      <div style="max-width:70%">
+        <div style="font-weight:700">${def.name}</div>
+        <div style="opacity:.8;font-size:.95rem;margin-top:2px">${desc}</div>
+        <div style="opacity:.7;font-size:.9rem;margin-top:2px">Level: ${lvl}/${def.max}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="pill">Cost: ${formatNum(cost)}</div>
+        <button class="btn ${can?'orange':''}" data-up="${def.key}" ${can?'':'disabled'}>${can?'Buy':'Need ' + formatNum(cost)}</button>
+      </div>
+    `;
+
+    row.querySelector("[data-up]").onclick = async ()=>{
+      try{
+        const r = await fetch("/api/buy_prestige_upgrade",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({key:def.key})
+        });
+        const j = await r.json();
+        if(j.ok){
+          prestige = j.prestige;
+          recalc(); update(); renderPrestigeShop(); saveLocal();
+        }
+      }catch(e){}
+    };
+
+    wrap.appendChild(row);
+  });
+}
+
+document.getElementById("btn_ascend").onclick = async ()=>{
+  const est = Math.floor(((cps||0)/1_000_000) * ascMult());
+  if(!confirm(`Ascend now? You will reset to 0 and gain +${est} tryzomiques.`)) return;
+  try{
+    const r = await fetch("/api/ascend",{method:"POST"});
+    const j = await r.json();
+    if(j.ok){
+      // wipe local, apply fresh save from server, then reload prestige
+      localStorage.removeItem("autistes_clicker");
+      count = 0; cps = 0; shop = JSON.parse(JSON.stringify(DEFAULT_SHOP));
+      prestige = j.prestige || prestige;
+      // server already saved a fresh progress; also pull it
+      await loadServer();
+      await awaitPrestige();
+      // apply start boost to brand new run
+      count += prestigeStartBoost();
+      recalc(); render(); update(); saveLocal();
+      document.getElementById("sync_msg").textContent = `Ascended +${j.award}`;
+    } else {
+      alert(j.err || "Ascend failed");
+    }
+  }catch(e){ alert("Ascend error"); }
+};
 document.getElementById("btn_save").onclick=saveServer;
 document.getElementById("btn_load").onclick=loadServer;
 document.getElementById("btn_reset").onclick=()=>{ localStorage.removeItem("autistes_clicker"); count=0; shop=JSON.parse(JSON.stringify(DEFAULT_SHOP)); recalc(); update(); };
@@ -1014,8 +1384,23 @@ async function applySettings(){
 setLang("fr");
 applyLang();
 applySettings();
-loadLocal(); recalc(); render(); update();
-setInterval(()=>{ count+=cps; update(); saveLocal(); },1000);
+loadLocal();
+recalc();
+render();
+awaitPrestige().then(()=>{
+  // apply start boost only if fresh (local count==0 and no shop levels)
+  const anyLvl = shop.some(s=> (s.lvl||0) > 0);
+  if (count === 0 && !anyLvl) {
+    count += prestigeStartBoost();
+  }
+  update();
+});
+setInterval(()=>{
+  count += cps;
+  updateTryzEst();
+  update();
+  saveLocal();
+},1000);
 </script>
 """
 
