@@ -337,6 +337,13 @@ def home():
       .btn.solid{{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed}}
       .btn.warn{{background:#fb7185;border-color:#fb7185;color:#140a0a}}
       .row{{display:flex;gap:10px;flex-wrap:wrap;align-items:center}}
+      /* toolbar layout (desktop + mobile) */
+.toolbar{{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}}
+.toolbar-left,.toolbar-right{{display:flex;gap:10px;align-items:center;flex-wrap:wrap}}
+@media (max-width:700px){{
+  .toolbar{{flex-direction:column;align-items:stretch}}
+  .toolbar-right{{justify-content:flex-start}}
+}}
       input,select,button{{border-radius:12px;border:1px solid var(--border);padding:12px;background:#13131c;color:var(--ink)}}
       button.solid{{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed;cursor:pointer}}
       label b{{display:block;margin-bottom:6px;color:#d9d9ff}}
@@ -350,18 +357,20 @@ def home():
           <div><button class="btn ok">Save Update</button></div>
         </form>
       </div>
-      <div class="row" style="justify-content:space-between;margin-bottom:16px">
-        <div class="row">
-          <a class="btn solid" href="/clicker">🎮 {T('goto_clicker')}</a>
-          <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
-          <a class="btn" href="/disclaimer">ℹ️ Respect</a>
-        </div>
-        <div class="row">
-          <a class="btn" href="/lang?to=en">{T('change_en')}</a>
-          <a class="btn" href="/lang?to=fr">{T('change_fr')}</a>
-          {"<span style='margin-left:8px'></span>"+admin_link if admin_link else ""}
-        </div>
-      </div>
+      <div class="toolbar">
+  <div class="toolbar-left">
+    <a class="btn solid" href="/clicker">🎮 {{ T('goto_clicker') }}</a>
+    <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+    <a class="btn" href="/disclaimer">ℹ️ Respect</a>
+  </div>
+
+  <div class="toolbar-right">
+    <a class="btn" href="/lang?to=en">{{ T('change_en') }}</a>
+    <a class="btn" href="/lang?to=fr">{{ T('change_fr') }}</a>
+    {"<span style='margin-left:8px'></span>"+admin_link if admin_link else ""}
+  </div>
+</div>
+
 
       <div class="panel" style="text-align:center">
         <h1 style="margin:8px 0; letter-spacing:.5px">{T('title_home')}</h1>
@@ -839,14 +848,27 @@ def admin_panel():
       .grid{{display:grid;gap:12px;grid-template-columns:1fr 1fr}}
       .row{{display:flex;align-items:center;gap:12px;flex-wrap:wrap}}
       .pill{{padding:6px 10px;border:1px solid #2a2a2a;border-radius:999px;background:#10101a}}
+
+      /* toolbar layout (desktop + mobile) */
+      .toolbar{{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}}
+      .toolbar-left,.toolbar-right{{display:flex;gap:10px;align-items:center;flex-wrap:wrap}}
+      @media (max-width:700px){{
+        .toolbar{{flex-direction:column;align-items:stretch}}
+        .toolbar-right{{justify-content:flex-start}}
+      }}
     </style>
     <div class="container">
-      <div class="card" style="display:flex;justify-content:space-between;align-items:center">
-        <h1 style="margin:4px 0">{T('admin')}</h1>
-        <div class="row">
-          <a class="btn" href="/">← Home</a>
-          <a class="btn" href="/disclaimer">ℹ️ Respect</a>
-          <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+
+      <div class="card">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <h1 style="margin:4px 0">{T('admin')}</h1>
+          </div>
+          <div class="toolbar-right">
+            <a class="btn" href="/">← Home</a>
+            <a class="btn" href="/disclaimer">ℹ️ Respect</a>
+            <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+          </div>
         </div>
       </div>
 
@@ -874,6 +896,7 @@ def admin_panel():
         </div>
         <p style="color:#9aa0a6;margin-top:8px">PNG/JPG/WEBP/GIF/SVG. Applied in-game on next load (persists on restart).</p>
       </div>
+
       <div class="card">
         <h2 style="margin:0 0 8px 0">Bot Seeder</h2>
         <form method="post" action="/admin/seed_bots" class="act" style="display:flex;gap:8px;flex-wrap:wrap">
@@ -896,32 +919,33 @@ def admin_panel():
           <thead><tr><th>{T('users')}</th><th>{T('actions')}</th></tr></thead>
           <tbody>{table}</tbody>
         </table>
+
         <div class="card">
-  <h2 style="margin-top:0">Gérer les commentaires</h2>
-  <form onsubmit="deleteReview(event)" class="act" style="display:flex;gap:8px;flex-wrap:wrap">
-    <input name="ts" id="rev_ts" placeholder="Timestamp du commentaire" required>
-    <button class="btn warn">Supprimer le commentaire</button>
-  </form>
-  <p class="pill" id="rev_del_msg">Entre le timestamp exact (fourni dans /api/reviews ou DB)</p>
-</div>
+          <h2 style="margin-top:0">Gérer les commentaires</h2>
+          <form onsubmit="deleteReview(event)" class="act" style="display:flex;gap:8px;flex-wrap:wrap">
+            <input name="ts" id="rev_ts" placeholder="Timestamp du commentaire" required>
+            <button class="btn warn">Supprimer le commentaire</button>
+          </form>
+          <p class="pill" id="rev_del_msg">Entre le timestamp exact (fourni dans /api/reviews ou DB)</p>
+        </div>
 
-<script>
-async function deleteReview(e){{   // <-- {{ }}
-  e.preventDefault();
-  const ts = document.getElementById("rev_ts").value;
-  const res = await fetch("/admin/delete_review", {{
-    method: "POST",
-    headers: {{"Content-Type": "application/x-www-form-urlencoded"}},  // <-- {{ }}
-    body: "ts=" + encodeURIComponent(ts)
-  }});
-  const j = await res.json().catch(()=>({{}}));
-  document.getElementById("rev_del_msg").textContent = j.ok ? "Supprimé ✓" : "Erreur";
-}}
-</script>
-
+        <script>
+        async function deleteReview(e){{   // f-string escaping
+          e.preventDefault();
+          const ts = document.getElementById("rev_ts").value;
+          const res = await fetch("/admin/delete_review", {{
+            method: "POST",
+            headers: {{"Content-Type": "application/x-www-form-urlencoded"}},
+            body: "ts=" + encodeURIComponent(ts)
+          }});
+          const j = await res.json().catch(()=>({{}}));
+          document.getElementById("rev_del_msg").textContent = j.ok ? "Supprimé ✓" : "Erreur";
+        }}
+        </script>
 
       </div>
     </div>"""
+
 
 def _adjust_user_count(username, delta):
     with lock:
@@ -1188,21 +1212,21 @@ def clicker():
   .stat .v{font-size:20px;font-weight:700}
   .shimmer{background:linear-gradient(90deg,rgba(124,58,237,.15),rgba(239,68,68,.15));filter:blur(30px);position:absolute;inset:-30px;z-index:-1}
 </style>
-<div class="wrap" id="root">
-  <div class="row" id="topbar">
-    <div class="row" style="gap:8px">
-      <button class="btn" onclick="setLang('fr')">Français</button>
-      <button class="btn" onclick="setLang('en')">English</button>
-      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
-      <img id="logo" alt="logo">
-    </div>
-    <div class="row">
-      <a class="btn" href="/">← Home</a>
-      <a class="btn blue" href="/login">Login</a>
-      <a class="btn blue" href="/register">Register</a>
-      <a class="btn red" href="/logout">Logout</a>
-    </div>
+<div id="topbar" class="toolbar">
+  <div class="toolbar-left" style="gap:8px">
+    <button class="btn" onclick="setLang('fr')">Français</button>
+    <button class="btn" onclick="setLang('en')">English</button>
+    <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+    <img id="logo" alt="logo">
   </div>
+  <div class="toolbar-right">
+    <a class="btn" href="/">← Home</a>
+    <a class="btn blue" href="/login">Login</a>
+    <a class="btn blue" href="/register">Register</a>
+    <a class="btn red" href="/logout">Logout</a>
+  </div>
+</div>
+
 
   <h1 id="title" style="text-align:center;margin:10px 0;letter-spacing:.5px;text-shadow:0 0 18px rgba(124,58,237,.35)">Autists Clicker</h1>
 
@@ -2043,14 +2067,18 @@ def leaderboard_page():
       .muted{color:#9aa0a6}
     </style>
 
-    <div class="wrap">
-      <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+      <div class="card">
+    <div class="toolbar">
+      <div class="toolbar-left">
         <h1 style="margin:0">Leaderboard</h1>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span id="updated" class="muted">—</span>
-          <a class="btn" href="/">← Home</a>
-        </div>
       </div>
+      <div class="toolbar-right">
+        <span id="updated" class="muted">—</span>
+        <a class="btn" href="/">← Home</a>
+      </div>
+    </div>
+  </div>
+
 
       <div class="grid">
         <div class="card">
@@ -2145,15 +2173,19 @@ def disclaimer():
   .muted{color:#9aa0a6}
 </style>
 
-<div class="wrap">
-  <div class="card" style="display:flex;justify-content:space-between;align-items:center">
-    <h1 style="margin:0">Respect & Inclusion</h1>
-    <div style="display:flex;gap:8px">
+<div class="card">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <h1 style="margin:0">Respect & Inclusion</h1>
+    </div>
+    <div class="toolbar-right">
       <a class="btn" href="/">← Home</a>
       <a class="btn" href="/clicker">🎮 Clicker</a>
       <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
     </div>
   </div>
+</div>
+
 
   <div class="card">
     <h2 style="margin:.2rem 0">FR — Note de respect</h2>
