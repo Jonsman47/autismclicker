@@ -169,28 +169,53 @@ def compact(n):
     except:
         return str(n)
     # short scale jusqu’à 1e33
+       # short scale up to 1e75 (then fallback to scientific)
     scales = [
-        (1e33, "de"),  # decillion
-        (1e30, "no"),  # nonillion
-        (1e27, "oc"),  # octillion
-        (1e24, "sp"),  # septillion
-        (1e21, "sx"),  # sextillion
-        (1e18, "qi"),  # quintillion
-        (1e15, "qa"),  # quadrillion
-        (1e12, "t"),   # trillion
-        (1e9,  "b"),   # billion
-        (1e6,  "m"),   # million
-        (1e3,  "k"),   # thousand
+        (1e75, "qavg"),  # quattuorvigintillion
+        (1e72, "tvg"),   # tresvigintillion
+        (1e69, "dvg"),   # duovigintillion
+        (1e66, "uvg"),   # unvigintillion
+        (1e63, "vg"),    # vigintillion
+        (1e60, "nd"),    # novemdecillion
+        (1e57, "od"),    # octodecillion
+        (1e54, "spd"),   # septendecillion
+        (1e51, "sxd"),   # sexdecillion
+        (1e48, "qid"),   # quindecillion
+        (1e45, "qad"),   # quattuordecillion
+        (1e42, "td"),    # tredecillion
+        (1e39, "dd"),    # duodecillion
+        (1e36, "ud"),    # undecillion
+        (1e33, "de"),    # decillion
+        (1e30, "no"),    # nonillion
+        (1e27, "oc"),    # octillion
+        (1e24, "sp"),    # septillion
+        (1e21, "sx"),    # sextillion
+        (1e18, "qi"),    # quintillion
+        (1e15, "qa"),    # quadrillion
+        (1e12, "t"),     # trillion
+        (1e9,  "b"),     # billion
+        (1e6,  "m"),     # million
+        (1e3,  "k"),     # thousand
     ]
+
     for div, suf in scales:
-        if abs(n) >= div:
-            val = round(n/div, 2)
-            s = f"{val:.2f}".rstrip("0").rstrip(".")
-            return f"{s}{suf}"
+      if abs(n) >= div:
+          val = n / div
+          # keep up to 2 decimals but remove useless zeros and dot
+          s = f"{val:.2f}".rstrip("0").rstrip(".")
+          return f"{s}{suf}"
+
+  # scientific fallback for ultra-large values
+    if abs(n) >= 1e6:
+        s = f"{n:.2e}".replace("e+0", "e").replace("e+", "e")
+        return s
+
     try:
-        return str(int(n))
+        s = str(int(n)) if float(n).is_integer() else str(round(n, 2))
     except:
-        return str(n)
+        s = str(n)
+    return s
+
 
 # ---------- Auth ----------
 @app.get("/register")
@@ -353,9 +378,12 @@ def home():
           <div class="card">
     <h2 style="margin-top:0">Public Update Note</h2>
     <form method="post" action="/admin/set_update" class="grid" style="grid-template-columns:1fr">
-      <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:"
-        style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_txt}</textarea>
-    </form>
+  <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:"
+    style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_txt}</textarea>
+  <div class="row" style="margin-top:8px;justify-content:flex-end">
+    <button class="btn solid" type="submit">Save</button>
+  </div>
+</form>
   </div>
       <div class="toolbar">
   <div class="toolbar-left">
@@ -594,8 +622,12 @@ PRESTIGE_UPGRADES = [
 ]
 
 # ---------- Achievements (server authority) ----------
-# +5% a/s for each unlocked (multiplicative: 1.05 ** n)
+# Base: +0.25% a/s per achievement (multiplicative: 1.0025 ** n)
+# Some "extreme" achievements grant large bonuses (+10% / +25% / +50%)
 # +1000 a/s flat bonus if ALL are unlocked
+
+BASE_ACH_MULT = 1.0025  # 0.25% per achievement (multiplicative)
+
 
 # Milestones
 CPS_TARGETS   = [1,2,5,10,20,50,100,200,500,1_000,2_000,5_000,10_000,20_000,50_000,100_000,200_000,500_000,1_000_000,2_000_000]
@@ -605,6 +637,23 @@ COUNT_TARGETS = [1_000,10_000,100_000,1_000_000,10_000_000,100_000_000,1_000_000
                  1_000_000_000_000_000_000_000,10_000_000_000_000_000_000_000]
 ASC_TARGETS   = [1,5,10,25,50]
 BUY_THRESHOLDS = [10,25,50,100]  # per core unit
+# Extreme long-term achievements (months+ grind)
+EXTREME_CPS = [
+    (1_000_000_000_000_000_000_000_000,           "ultra_cps_1t",   "Insane a/s: 1T",    1.10),  # +10%
+    (1_000_000_000_000_000_000_000_000_000,       "ultra_cps_1qa",  "Insane a/s: 1Qa",   1.25),  # +25%
+    (1_000_000_000_000_000_000_000_000_000_000,   "ultra_cps_1qi",  "Beyond a/s: 1Qi",   1.50),  # +50%
+]
+EXTREME_COUNT = [
+    (10**30, "ultra_count_1e30", "Bank 1e39", 1.10),  # +10%
+    (10**33, "ultra_count_1e33", "Bank 1e43", 1.25),  # +25%
+    (10**36, "ultra_count_1e36", "Bank 1e56", 1.50),  # +50%
+]
+EXTREME_ASC = [
+    (100, "ultra_asc_100", "Ascend ×100", 1.10),  # +10%
+    (250, "ultra_asc_250", "Ascend ×250", 1.25),  # +25%
+    (500, "ultra_asc_500", "Ascend ×500", 1.50),  # +50%
+]
+
 
 # Core unit keys (match client shop)
 CORE_UNITS = {
@@ -627,26 +676,49 @@ CORE_KEYS = list(CORE_UNITS.keys())  # 45 units → 45 * 4 = 180 buy achievement
 # Build static definition list (≈225)
 def build_achievement_defs():
     defs = []
+    # base achievements: each grants BASE_ACH_MULT
     for v in CPS_TARGETS:
-        defs.append({"id": f"cps_{v}", "group":"cps", "name": f"Hit {v} a/s", "desc": f"Reach ≥ {v} autists/s"})
+        defs.append({"id": f"cps_{v}", "group":"cps", "name": f"Hit {v} a/s",
+                     "desc": f"Reach ≥ {v} autists/s", "mult": BASE_ACH_MULT})
     for v in COUNT_TARGETS:
-        defs.append({"id": f"count_{v}", "group":"count", "name": f"Bank {v}", "desc": f"Total autists ≥ {v}"})
+        defs.append({"id": f"count_{v}", "group":"count", "name": f"Bank {v}",
+                     "desc": f"Total autists ≥ {v}", "mult": BASE_ACH_MULT})
     for v in ASC_TARGETS:
-        defs.append({"id": f"asc_{v}", "group":"asc", "name": f"Ascend ×{v}", "desc": f"Perform {v} ascensions"})
+        defs.append({"id": f"asc_{v}", "group":"asc", "name": f"Ascend ×{v}",
+                     "desc": f"Perform {v} ascensions", "mult": BASE_ACH_MULT})
     for key in CORE_KEYS:
         nm = CORE_UNITS.get(key, key)
         for n in BUY_THRESHOLDS:
-            defs.append({"id": f"buy_{key}_{n}", "group":"buy", "name": f"{nm} ×{n}", "desc": f"Own {n} of {nm}"})
+            defs.append({"id": f"buy_{key}_{n}", "group":"buy",
+                         "name": f"{nm} ×{n}", "desc": f"Own {n} of {nm}",
+                         "mult": BASE_ACH_MULT})
+
+    # extreme achievements: large multipliers
+    for v, aid, nm, mult in EXTREME_CPS:
+        defs.append({"id": aid, "group": "cps", "name": nm,
+                     "desc": f"Reach ≥ {v} autists/s", "mult": float(mult)})
+    for v, aid, nm, mult in EXTREME_COUNT:
+        defs.append({"id": aid, "group": "count", "name": nm,
+                     "desc": f"Total autists ≥ {v}", "mult": float(mult)})
+    for v, aid, nm, mult in EXTREME_ASC:
+        defs.append({"id": aid, "group": "asc", "name": nm,
+                     "desc": f"Perform {v} ascensions", "mult": float(mult)})
+
     return defs
 
+
 ACH_DEFS = build_achievement_defs()
-ACH_TOTAL = len(ACH_DEFS)  # expected 225
+ACH_MULT_BY_ID = {d["id"]: float(d.get("mult", BASE_ACH_MULT)) for d in ACH_DEFS}
+ACH_TOTAL = len(ACH_DEFS)
 ALL_ACH_BONUS = 1000  # +1000 a/s flat if all unlocked
 
-def _ach_mult(n):   # multiplicative 5% per achievement
-    try: n = int(n)
-    except: n = 0
-    return (1.05) ** max(0, n)
+
+def _ach_product(ach_ids):
+    """Return total multiplicative bonus from the list of unlocked achievement IDs."""
+    m = 1.0
+    for aid in ach_ids or []:
+        m *= ACH_MULT_BY_ID.get(aid, BASE_ACH_MULT)
+    return m
 
 def _scan_achievements(doc):
     """
@@ -661,16 +733,23 @@ def _scan_achievements(doc):
 
     have = set((doc or {}).get("ach") or [])
 
-    # cps
+    # base milestones
     for v in CPS_TARGETS:
         if cps >= v: have.add(f"cps_{v}")
-    # total
     for v in COUNT_TARGETS:
         if total >= v: have.add(f"count_{v}")
-    # ascends
     for v in ASC_TARGETS:
         if asc >= v: have.add(f"asc_{v}")
-    # per-unit buys (only core keys; custom units ignored)
+
+    # extreme milestones
+    for v, aid, _, _ in EXTREME_CPS:
+        if cps >= v: have.add(aid)
+    for v, aid, _, _ in EXTREME_COUNT:
+        if total >= v: have.add(aid)
+    for v, aid, _, _ in EXTREME_ASC:
+        if asc >= v: have.add(aid)
+
+    # per-unit buys (core only)
     qty = { (it.get("key") or ""): int(it.get("lvl") or 0) for it in shop }
     for key in CORE_KEYS:
         lv = int(qty.get(key, 0))
@@ -680,6 +759,7 @@ def _scan_achievements(doc):
     doc["ach"] = sorted(have)
     has_all = len(doc["ach"]) >= ACH_TOTAL
     return len(doc["ach"]), ACH_TOTAL, has_all
+
 
 @app.get("/api/achievements")
 def api_get_achievements():
@@ -691,14 +771,18 @@ def api_get_achievements():
         user = (db.get("users") or {}).get(u) or {}
         n, tot, all_ok = _scan_achievements(user)  # update in-memory
         save_db(db)
+        unlocked = user.get("ach", [])
+        mult = _ach_product(unlocked)
+        save_db(db)
         return jsonify({
             "ok": True,
-            "defs": ACH_DEFS,               # ~225 items
-            "unlocked": user.get("ach", []),
+            "defs": ACH_DEFS,
+            "unlocked": unlocked,
             "count": n, "total": tot,
-            "mult": _ach_mult(n),
+            "mult": mult,
             "all": all_ok, "all_bonus": ALL_ACH_BONUS
         })
+
 
 # ---------- Profiles (explicit create) ----------
 def _profile_from_doc(username, doc):
@@ -707,14 +791,15 @@ def _profile_from_doc(username, doc):
     prest = (doc or {}).get("prestige") or _empty_prestige()
     has_profile = isinstance((doc or {}).get("profile"), dict)
 
-    # keep achievements up to date (doesn't need a profile)
+    # keep achievements up to date
     _scan_achievements(doc)
     ach_ids = doc.get("ach") or []
     ach_map = {d["id"]: d for d in ACH_DEFS}
     ach_list = [{
         "id": aid,
         "name": ach_map.get(aid, {"name": aid}).get("name"),
-        "group": ach_map.get(aid, {}).get("group", "")
+        "group": ach_map.get(aid, {}).get("group", ""),
+        "mult": float(ach_map.get(aid, {}).get("mult", BASE_ACH_MULT)),
     } for aid in ach_ids[:200]]
 
     return {
@@ -727,7 +812,7 @@ def _profile_from_doc(username, doc):
         "asc": int(prest.get("asc") or 0),
         "ach_count": len(ach_ids),
         "ach_total": ACH_TOTAL,
-        "ach_mult": _ach_mult(len(ach_ids)),
+        "ach_mult": _ach_product(ach_ids),
         "ach": ach_list,
     }
 
@@ -878,9 +963,17 @@ def profile_page():
 <script>
 function fmt(n){
   n = Number(n)||0;
-  const s = [[1e33,'de'],[1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],[1e18,'qi'],[1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']];
-  for(const [d,u] of s){ if(Math.abs(n)>=d){ let v=(n/d).toFixed(2).replace(/\\.00$/,'').replace(/(\\.\\d*[1-9])0$/,'$1'); return v+u; } }
+    const s = [
+    [1e75,'qavg'],[1e72,'tvg'],[1e69,'dvg'],[1e66,'uvg'],[1e63,'vg'],
+    [1e60,'nd'],  [1e57,'od'], [1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
+    [1e45,'qad'], [1e42,'td'], [1e39,'dd'], [1e36,'ud'], [1e33,'de'],
+    [1e30,'no'],  [1e27,'oc'], [1e24,'sp'], [1e21,'sx'], [1e18,'qi'],
+    [1e15,'qa'],  [1e12,'t'],  [1e9,'b'],   [1e6,'m'],   [1e3,'k']
+  ];
+    if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
   return String(Math.trunc(n));
+  if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+", "");
+
 }
 function param(n){ return new URLSearchParams(location.search).get(n)||''; }
 
@@ -907,7 +1000,7 @@ function renderProfile(p, isSelf){
         <div style="font-weight:700">${(a.name||a.id)}</div>
         <div style="opacity:.75">${(a.group||'').toUpperCase()}</div>
       </div>
-      <div class="pill">✓ +5%</div>
+      <div class="pill">✓ +${(((Number(a.mult||1)-1)*100).toFixed(2))}%</div>
     `;
     wrap.appendChild(el);
   });
@@ -1831,7 +1924,7 @@ function renderAchievementsModal(){
             <div style="opacity:.8">${d.desc}</div>
             <div style="opacity:.6;font-size:.9rem">${d.group.toUpperCase()}</div>
           </div>
-          <div class="pill">${ok? "✓ +5%" : "Locked"}</div>
+          <div class="pill">${ok ? ("✓ +" + (((Number(d.mult||1)-1)*100).toFixed(2)) + "%") : "Locked"}</div>
         `;
         wrap.appendChild(row);
       });
@@ -2008,11 +2101,67 @@ const megaUnits = [
   mk("Autiste Dyson Sphere", "dyson", 1e15, 5e11),
   mk("Empire Autiste Galactique", "empiregal", 1e16, 1e14),
   mk("Autiste Univers Portable", "universe", 1e18, 2e16),
-  mk("Simulation Autiste Infinie", "simul", 1e20, 100e16),
+  mk("Simulation Autiste Infinie", "simul", 1e20, 1e18),
   mk("Autiste Dieu Ancien", "god", 1e24, 1e19),
   mk("Autiste Omnivers", "omniverse", 1e28, 1e22),
   mk("Autiste Source du Tout", "source", 1e33, 1e26),
 ];
+const mythicUnits = [
+  mk("Autiste Quantum Foam",         "qfoam",        1e36, 1e30),
+  mk("Autiste Neutrino Forge",       "neutrino",     5e36, 2e30),
+  mk("Autiste Gluon Foundry",        "gluon",        1e37, 5e30),
+  mk("Autiste Planck Reactor",       "planck",       5e37, 1e31),
+  mk("Autiste Tachyon Drive",        "tachyon",      1e38, 2e31),
+  mk("Autiste Singularity Core",     "singularity",  5e38, 5e31),
+  mk("Autiste Entanglement Array",   "entangle",     1e39, 1e32),
+  mk("Autiste Higgs Farm",           "higgs",        5e39, 2e32),
+  mk("Autiste Wormhole Lattice",     "wormhole",     1e40, 5e32),
+  mk("Autiste Dyson Cloud",          "dysoncloud",   5e40, 1e33),
+  mk("Autiste Matryoshka Brain",     "matbrain",     1e41, 2e33),
+  mk("Autiste Chrono Forge",         "chronoforge",  5e41, 5e33),
+  mk("Autiste Probability Engine",   "probability",  1e42, 1e34),
+  mk("Autiste Antimatter Sun",       "antimatter",   5e42, 2e34),
+  mk("Autiste Quantum Computer",     "qcomputer",    1e43, 5e34),
+  mk("Autiste Dark Energy Tap",      "darkenergy",   5e43, 1e35),
+  mk("Autiste Perfect Vacuum",       "vacuum",       1e44, 2e35),
+  mk("Autiste Brane Weave",          "branes",       5e44, 5e35),
+  mk("Autiste Multiversal Hub",      "multihub",     1e45, 1e36),
+  mk("Autiste Primordial Forge",     "primordial",   5e45, 2e36),
+  mk("Autiste Ω Engine",             "omega",        1e46, 5e36),
+  mk("Autiste Alpha-Omega Ring",     "alphaomega",   5e46, 1e37),
+  mk("Autiste Akashic Archive",      "akashic",      1e47, 2e37),
+  mk("Autiste Oracle Mesh",          "oracle",       5e47, 5e37),
+  mk("Autiste Creation Foundry",     "creation",     1e48, 1e38),
+];
+
+const ultraUnits = [
+  mk("Autiste Quantum Matryoshka",      "matryoshka",   1e36, 1e27),
+  mk("Autiste Brane Weaving Loom",      "branloom",     3e36, 3e27),
+  mk("Autiste Vacuum Forge",            "vacuumforge",  1e37, 1e28),
+  mk("Autiste Dark Energy Turbine",     "darkenergy",   3e37, 3e28),
+  mk("Autiste Cosmic Filament",         "filament",     1e38, 1e29),
+  mk("Autiste Hypercluster",            "hypercluster", 3e38, 4e29),
+  mk("Autiste Inflation Engine",        "inflation",    1e39, 1e30),
+  mk("Autiste False Vacuum Drill",      "fvacuum",      3e39, 3e30),
+  mk("Autiste Entropy Reverser",        "entropy",      1e40, 1e31),
+  mk("Autiste Causal Lattice",          "lattice",      3e40, 3e31),
+  mk("Autiste Axion Farm",              "axion",        1e42, 1e32),
+  mk("Autiste Tachyon Accelerator",     "tachyon",      1e43, 3e32),
+  mk("Autiste Warp Foundry",            "warp",         1e45, 1e33),
+  mk("Autiste Multiversal Loom",        "multiloom",    3e45, 3e33),
+  mk("Autiste Chrono Smithy",           "chrono",       1e48, 1e34),
+  mk("Autiste Probability Mine",        "probmine",     3e48, 3e34),
+  mk("Autiste Ontology Engine",         "ontology",     1e51, 1e35),
+  mk("Autiste Kardashev Hub",           "karda",        1e54, 1e36),
+  mk("Autiste Omega Foundry",           "omegafoundry", 1e57, 1e37),
+  mk("Autiste Reality Printer",         "rprinter",     1e60, 1e38),
+  mk("Autiste Prime Universe Seeder",   "primes",       1e63, 1e39),
+  mk("Autiste Meta-Godworks",           "metagod",      1e66, 1e40),
+  mk("Autiste Omni-Anvil",              "omnianvil",    1e69, 1e41),
+  mk("Autiste Eternity Mill",           "eternity",     1e72, 1e42),
+  mk("Autiste Origin Forge",            "originforge",  1e75, 1e43),
+];
+
 
 const DEFAULT_SHOP = [
   ...earlyUnits, 
@@ -2020,8 +2169,10 @@ const DEFAULT_SHOP = [
   ...midUnits, 
   ...randomUnits, 
   ...gigaUnits, 
-  ...megaUnits
+  ...megaUnits,
+  ...ultraUnits
 ];
+
 
 // Load the shop data from the server
 async function loadShopData() {
@@ -2139,9 +2290,12 @@ function addCustom(name, base){
 
 function formatNum(n){
   n = Number(n)||0;
-  const scales = [
-    [1e33,"de"], [1e30,"no"], [1e27,"oc"], [1e24,"sp"], [1e21,"sx"],
-    [1e18,"qi"], [1e15,"qa"], [1e12,"t"],  [1e9,"b"],   [1e6,"m"], [1e3,"k"]
+    const scales = [
+    [1e75,"qavg"], [1e72,"tvg"], [1e69,"dvg"], [1e66,"uvg"], [1e63,"vg"],
+    [1e60,"nd"],   [1e57,"od"],  [1e54,"spd"], [1e51,"sxd"], [1e48,"qid"],
+    [1e45,"qad"],  [1e42,"td"],  [1e39,"dd"],  [1e36,"ud"],  [1e33,"de"],
+    [1e30,"no"],   [1e27,"oc"],  [1e24,"sp"],  [1e21,"sx"],  [1e18,"qi"],
+    [1e15,"qa"],   [1e12,"t"],   [1e9,"b"],    [1e6,"m"],    [1e3,"k"],
   ];
   for (const [div,suf] of scales){
     if (Math.abs(n) >= div){
@@ -2817,16 +2971,20 @@ def leaderboard_page():
     <script>
       function fmt(n){
         n = Number(n)||0;
-        const scales = [
-          [1e33,'de'],[1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],
-          [1e18,'qi'],[1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']
-        ];
+          const s = [
+    [1e75,'qavg'],[1e72,'tvg'],[1e69,'dvg'],[1e66,'uvg'],[1e63,'vg'],
+    [1e60,'nd'],  [1e57,'od'], [1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
+    [1e45,'qad'], [1e42,'td'], [1e39,'dd'], [1e36,'ud'], [1e33,'de'],
+    [1e30,'no'],  [1e27,'oc'], [1e24,'sp'], [1e21,'sx'], [1e18,'qi'],
+    [1e15,'qa'],  [1e12,'t'],  [1e9,'b'],   [1e6,'m'],   [1e3,'k']
+  ];
         for (const [div,suf] of scales){
           if (Math.abs(n) >= div){
             const val = (n/div).toFixed(2).replace(/\\.00$/,'').replace(/(\\.\\d*[1-9])0$/,'$1');
             return val + suf;
           }
         }
+          if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
         return String(Math.trunc(n));
       }
 
