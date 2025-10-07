@@ -136,15 +136,6 @@ STR = {
     "lang":"Language",
     "change_en":"Change to English",
     "change_fr":"Passer en français",
-    "home":"Home",
-    "profile":"Profile",
-    "leaderboard":"Leaderboard",
-    "respect":"Respect",
-    "username":"Username",
-    "password":"Password",
-    "save":"Save",
-    "home_update_heading":"Public Update Note",
-    "home_update_placeholder":"Update 1.2.1:\nBug fixes ...\nAdded Features:",
     "calc":"Calculator",
     "num_a":"Number A",
     "num_b":"Number B (ignored for Square)",
@@ -183,15 +174,6 @@ STR = {
     "lang":"Langue",
     "change_en":"Change in English",
     "change_fr":"Changer en Français",
-    "home":"Accueil",
-    "profile":"Profil",
-    "leaderboard":"Classement",
-    "respect":"Respect",
-    "username":"Nom d’utilisateur",
-    "password":"Mot de passe",
-    "save":"Enregistrer",
-    "home_update_heading":"Note de mise à jour publique",
-    "home_update_placeholder":"Mise à jour 1.2.1:\nCorrections de bugs ...\nNouvelles fonctionnalités :",
     "calc":"Calculatrice",
     "num_a":"Nombre A",
     "num_b":"Nombre B (inutile pour Carré)",
@@ -221,18 +203,12 @@ STR = {
 }
 
 def get_lang():
-    lang = session.get("lang") or request.args.get("lang") or "en"
-    if lang not in LANGS:
-        lang = "en"
+    lang = session.get("lang") or request.args.get("lang") or "fr"
+    if lang not in LANGS: lang = "fr"
     session["lang"] = lang
     return lang
 
-def T(key, lang=None):
-    lang = lang or get_lang()
-    pack = STR.get(lang)
-    if not pack:
-        pack = STR["en"]
-    return pack.get(key, STR["en"].get(key, key))
+def T(key): return STR.get(get_lang(), STR["en"]).get(key, key)
 
 def compact(n):
     try:
@@ -306,13 +282,13 @@ def register_form():
     </style>
     <div class="wrap">
       <div class="card">
-        <h2 style="margin-top:0">{T('register')}</h2>
+        <h2 style="margin-top:0">Register</h2>
         <form method="post" style="display:grid;gap:12px">
-          <label>{T('username')}<br><input name="u" required></label>
-          <label>{T('password')}<br><input name="p" type="password" required></label>
+          <label>Username<br><input name="u" required></label>
+          <label>Password<br><input name="p" type="password" required></label>
           <button class="btn violet">{T('register')}</button>
         </form>
-        <p style="margin-top:12px"><a class="btn" href="/">{'← ' + T('home')}</a></p>
+        <p style="margin-top:12px"><a class="btn" href="/">{'← Home'}</a></p>
       </div>
     </div>"""
 
@@ -347,13 +323,13 @@ def login_form():
     </style>
     <div class="wrap">
       <div class="card">
-        <h2 style="margin-top:0">{T('login')}</h2>
+        <h2 style="margin-top:0">Login</h2>
         <form method="post" style="display:grid;gap:12px">
-          <label>{T('username')}<br><input name="u" required></label>
-          <label>{T('password')}<br><input name="p" type="password" required></label>
-          <button>{T('login')}</button>
+          <label>Username<br><input name="u" required></label>
+          <label>Password<br><input name="p" type="password" required></label>
+          <button>Login</button>
         </form>
-        <p style="margin-top:12px"><a class="btn" href="/">{'← ' + T('home')}</a></p>
+        <p style="margin-top:12px"><a class="btn" href="/">{'← Home'}</a></p>
       </div>
     </div>"""
 
@@ -376,12 +352,9 @@ def logout():
 
 @app.get("/lang")
 def set_lang():
-    lang = request.args.get("to", "en")
-    if lang not in LANGS:
-        lang = "en"
+    lang = request.args.get("to","fr")
+    if lang not in LANGS: lang = "fr"
     session["lang"] = lang
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return jsonify({"ok": True, "lang": lang})
     return redirect(request.referrer or "/")
 
 # ---------- Home ----------
@@ -464,20 +437,20 @@ def home():
     </style>
     <div class="container">
           <div class="card">
-    <h2 style="margin-top:0">{T('home_update_heading')}</h2>
+    <h2 style="margin-top:0">Public Update Note</h2>
     <form method="post" action="/admin/set_update" class="grid" style="grid-template-columns:1fr">
-  <textarea name="update" rows="8" placeholder="{T('home_update_placeholder')}"
+  <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:"
     style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_html}</textarea>
   <div class="row" style="margin-top:8px;justify-content:flex-end">
-    <button class="btn solid" type="submit">{T('save')}</button>
+    <button class="btn solid" type="submit">Save</button>
   </div>
 </form>
   </div>
       <div class="toolbar">
   <div class="toolbar-left">
     <a class="btn solid" href="/clicker">🎮 {T('goto_clicker')}</a>
-    <a class="btn" href="/leaderboard">🏆 {T('leaderboard')}</a>
-    <a class="btn" href="/disclaimer">ℹ️ {T('respect')}</a>
+    <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+    <a class="btn" href="/disclaimer">ℹ️ Respect</a>
   </div>
 
   <div class="toolbar-right">
@@ -1442,9 +1415,9 @@ def admin_panel():
             <h1 style="margin:4px 0">{T('admin')}</h1>
           </div>
           <div class="toolbar-right">
-            <a class="btn" href="/">← {T('home')}</a>
-            <a class="btn" href="/disclaimer">ℹ️ {T('respect')}</a>
-            <a class="btn" href="/leaderboard">🏆 {T('leaderboard')}</a>
+            <a class="btn" href="/">← Home</a>
+            <a class="btn" href="/disclaimer">ℹ️ Respect</a>
+            <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
           </div>
         </div>
       </div>
@@ -1763,15 +1736,13 @@ def api_me():
 
 
 # ---------- Clicker ----------
-@app.get("/clicker")
+@app.get("/clicker")  
 def clicker():
-    lang = get_lang()
     with lock:
-        db = load_db()
-        _tick_bots(db)
-
-    # OPEN the one-and-only triple-quoted string
-    html = """<!doctype html><meta charset="utf-8"><title>Autists Clicker</title>
+      db = load_db()
+      _tick_bots(db)
+    return """
+<!doctype html><meta charset="utf-8"><title>Autists Clicker</title>
 <style>
   :root{
     --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --muted:#b6b6c6; --border:#232334;
@@ -1783,7 +1754,7 @@ def clicker():
      #000;color:#eee;margin:0;padding:18px}
   .wrap{max-width:1000px;margin:0 auto;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);padding:16px;border-radius:22px;box-shadow:0 0 60px rgba(124,58,237,.08)}
   .row{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
-  /* toolbar layout (desktop + mobile) */
+    /* toolbar layout (desktop + mobile) */
   .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .toolbar-left,.toolbar-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   @media (max-width:700px){
@@ -1814,79 +1785,24 @@ def clicker():
 @media (min-width:800px){ #ach_list{grid-template-columns:1fr 1fr} }
 .ach{border:1px solid #2b2d4a;border-radius:12px;padding:10px;background:#121322;display:flex;justify-content:space-between;gap:8px}
 .ach.ok{border-color:#2f9657;background:#142016}
-</style>
-
+  </style>
 <div id="topbar" class="toolbar">
   <div class="toolbar-left" style="gap:8px">
     <button class="btn" onclick="setLang('fr')">Français</button>
     <button class="btn" onclick="setLang('en')">English</button>
-    <a class="btn" id="nav_leaderboard" href="/leaderboard">🏆 Leaderboard</a>
-    <a class="btn" id="nav_profile" href="/profile">👤 Profile</a>
+    <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+    <a class="btn" href="/profile">👤 Profile</a>
     <img id="logo" alt="logo">
   </div>
   <div class="toolbar-right">
-    <a class="btn" id="nav_home" href="/">← Home</a>
-    <a class="btn blue" id="nav_login" href="/login">Login</a>
-    <a class="btn blue" id="nav_register" href="/register">Register</a>
+    <a class="btn" href="/">← Home</a>
+    <a class="btn blue" href="/login">Login</a>
+    <a class="btn blue" href="/register">Register</a>
     <a class="btn red" href="/logout">Logout</a>
   </div>
 </div>
 
-<!-- >>> PASTE THE REST OF YOUR PAGE HERE, UNCHANGED
-     This includes the section in your screenshot:
-     - <!-- Public Update box -->
-     - <!-- Rating summary -->
-     - statgrid, click button, save/load buttons
-     - prestige, shop, reviews
-     - achievements modal
-     - console
-     - ALL the big <script> blocks
-     and keep going until the very last closing </script> of the page. <<< -->
 
-</script>
-"""  # CLOSE the string ONLY once, here, after the final </script>
-
-    # Post-process language/labels safely (not an f-string)
-    html = html.replace('let LANG="fr";', f'let LANG="{lang}";')
-    html = html.replace('setLang("fr");', f'setLang("{lang}");')
-    html = html.replace(
-        'function setLang(l){ LANG = LANGS[l]?l:"fr"; applyLang(); update(); }',
-        """function setLang(l){
-  if(!LANGS[l]){return;}
-  const same = LANG === l;
-  LANG = l;
-  applyLang();
-  update();
-  if(same){ return; }
-  fetch(`/lang?to=${l}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}}).catch(()=>{});
-}"""
-    )
-    html = html.replace(
-        '  document.getElementById("lbl_shop").textContent = t("shop");\n  document.getElementById("c_msg").textContent = "";\n  const clickBtn=document.getElementById("click");\n  if(clickBtn) clickBtn.firstChild.nodeValue = t("click");\n  document.getElementById("cps_click").textContent = formatNum(cpsClick);\n  document.getElementById("rev_send").onclick = postReview;\n}',
-        """  document.getElementById("lbl_shop").textContent = t("shop");
-  document.getElementById("c_msg").textContent = "";
-  const clickBtn=document.getElementById("click");
-  if(clickBtn) clickBtn.firstChild.nodeValue = t("click");
-  document.getElementById("cps_click").textContent = formatNum(cpsClick);
-  document.getElementById("rev_send").onclick = postReview;
-  const navLeader = document.getElementById("nav_leaderboard");
-  if(navLeader) navLeader.textContent = `🏆 ${t("leaderboard")}`;
-  const navProfile = document.getElementById("nav_profile");
-  if(navProfile) navProfile.textContent = `👤 ${t("profile")}`;
-  const navHome = document.getElementById("nav_home");
-  if(navHome) navHome.textContent = `← ${t("home")}`;
-  const navLogin = document.getElementById("nav_login");
-  if(navLogin) navLogin.textContent = t("login");
-  const navRegister = document.getElementById("nav_register");
-  if(navRegister) navRegister.textContent = t("register");
-}"""
-    )
-
-    return html
-
-
-
-    html += r'''
   <h1 id="title" style="text-align:center;margin:10px 0;letter-spacing:.5px;text-shadow:0 0 18px rgba(124,58,237,.35)">Autists Clicker</h1>
 
     <!-- Public Update box -->
@@ -2002,12 +1918,10 @@ def clicker():
 
 
 <script>
-'''
-
 // ===== i18n (client EN/FR) =====
 const LANGS = {
-  fr:{shop:"Boutique",count:"Autistes",cps:"a/s",click:"+1 Autiste",create:"Créer un Autiste custom (coût: 1000)",level:"Niveau",cost:"Coût",buy:"Acheter",sell:"Vendre",upload:"Uploader vers mon compte",load:"Charger depuis mon compte",reset:"Reset local",leaderboard:"Classement",profile:"Profil",home:"Accueil",login:"Connexion",register:"Inscription",not_enough:"Pas assez d’autistes (1000 requis).",invalid:"Nom + coût valide (≥ 10) requis.",created:(u)=>`Créé: ${u.name} — base ${formatNum(u.base)}, ~${formatNum(u.inc)}/s (aléatoire).`},
-  en:{shop:"Shop",count:"Autists",cps:"a/s",click:"+1 Autist",create:"Create custom Autist (cost: 1000)",level:"Level",cost:"Cost",buy:"Buy",sell:"Sell",upload:"Upload to my account",load:"Load from my account",reset:"Reset local",leaderboard:"Leaderboard",profile:"Profile",home:"Home",login:"Login",register:"Register",not_enough:"Not enough autists (1000 required).",invalid:"Valid name + base cost (≥ 10) required.",created:(u)=>`Created: ${u.name} — base ${formatNum(u.base)}, ~${formatNum(u.inc)}/s (random).`}
+  fr:{shop:"Boutique",count:"Autistes",cps:"a/s",click:"+1 Autiste",create:"Créer un Autiste custom (coût: 1000)",level:"Niveau",cost:"Coût",buy:"Acheter",sell:"Vendre",upload:"Uploader vers mon compte",load:"Charger depuis mon compte",reset:"Reset local",not_enough:"Pas assez d’autistes (1000 requis).",invalid:"Nom + coût valide (≥ 10) requis.",created:(u)=>`Créé: ${u.name} — base ${formatNum(u.base)}, ~${formatNum(u.inc)}/s (aléatoire).`},
+  en:{shop:"Shop",count:"Autists",cps:"a/s",click:"+1 Autist",create:"Create custom Autist (cost: 1000)",level:"Level",cost:"Cost",buy:"Buy",sell:"Sell",upload:"Upload to my account",load:"Load from my account",reset:"Reset local",not_enough:"Not enough autists (1000 required).",invalid:"Valid name + base cost (≥ 10) required.",created:(u)=>`Created: ${u.name} — base ${formatNum(u.base)}, ~${formatNum(u.inc)}/s (random).`}
 };
 let LANG="fr";
 function setLang(l){ LANG = LANGS[l]?l:"fr"; applyLang(); update(); }
@@ -3036,7 +2950,22 @@ setInterval(()=>{
 })();
 </script>
 
-    """
+
+# ---------- Leaderboard (current count & a/s, refresh via client every 60s) ----------
+def _collect_leaderboards_simple():
+    with lock:
+        db = load_db()
+        rows = []
+        for u, doc in (db.get("users") or {}).items():
+            prog = (doc or {}).get("progress") or {}
+            rows.append({
+                "user": u,
+                "count": float(prog.get("count") or 0.0),
+                "cps":   float(prog.get("cps")   or 0.0),
+            })
+    top_count = sorted(rows, key=lambda r: r["count"], reverse=True)[:50]
+    top_cps   = sorted(rows, key=lambda r: r["cps"],   reverse=True)[:50]"""
+    return top_count, top_cps
 
 @app.get("/api/leaderboard")
 def api_leaderboard():
