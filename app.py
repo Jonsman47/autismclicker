@@ -2,7 +2,7 @@
 from flask import Flask, request, redirect, session, jsonify, send_from_directory, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import os, json, threading, secrets, time
+import os, json, threading, secrets, time, shutil
 
 app = Flask(__name__)
 
@@ -56,6 +56,13 @@ def load_db():
             db = json.load(f)
     except Exception:
         # keep the bad file for inspection instead of silently wiping it
+        bak = DB_PATH + ".bak"
+        if os.path.exists(bak):
+            try:
+                with open(bak, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
         bad = DB_PATH + ".bad"
         try: os.replace(DB_PATH, bad)
         except Exception: pass
@@ -72,6 +79,14 @@ def save_db(db):
     tmp = DB_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    bak = DB_PATH + ".bak"
+    if os.path.exists(DB_PATH):
+        try:
+            shutil.copy2(DB_PATH, bak)
+        except Exception:
+            pass
     os.replace(tmp, DB_PATH)  # atomic on POSIX
 
 def _tick_bots(db, rate_per_hour=0.001):
