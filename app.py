@@ -26,7 +26,8 @@ app.config.update(
 )
 
 
-DB_PATH = "db.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, os.environ.get("DB_PATH", "db.json"))
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -49,17 +50,26 @@ def load_db():
     try:
         with open(DB_PATH, "r", encoding="utf-8") as f:
             db = json.load(f)
-            db.setdefault("settings", {"bg": None, "logo": None})
-            db.setdefault("users", {})
-            db.setdefault("reviews", [])
-            db.setdefault("settings", {}).setdefault("update", "")
-            return db
-    except:
+    except Exception:
+        # keep the bad file for inspection instead of silently wiping it
+        bad = DB_PATH + ".bad"
+        try: os.replace(DB_PATH, bad)
+        except Exception: pass
         return _empty_db()
 
+    db.setdefault("settings", {"bg": None, "logo": None})
+    db.setdefault("users", {})
+    db.setdefault("reviews", [])
+    db.setdefault("settings", {}).setdefault("update", "")
+    return db
+
+
 def save_db(db):
-    with open(DB_PATH, "w", encoding="utf-8") as f:
+    tmp = DB_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, DB_PATH)  # atomic on POSIX
+
 
 def is_authed(): return bool(session.get("user"))
 def is_admin():  return session.get("user","").lower() == ADMIN_USERNAME
@@ -2124,5 +2134,14 @@ if __name__ == "__main__":
     with lock:
         db = load_db()
         db.setdefault("settings", {"bg":None,"logo":None})
+        users = db.setdefault("users", {})
+        if not users:  # first boot → make some entries so LB shows data
+            for _ in range(15):
+                name = _rand_username()
+                users[name] = {
+                    "pw": generate_password_hash(secrets.token_hex(8)),
+                    "progress": _fake_progress(),
+                    "prestige": _empty_prestige(),
+                }
         save_db(db)
-    app.run(host="0.0.0.0", port=5001, debug=True)
+
