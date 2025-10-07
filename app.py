@@ -2978,22 +2978,7 @@ setInterval(()=>{
 })();
 </script>
 
-
-# ---------- Leaderboard (current count & a/s, refresh via client every 60s) ----------
-def _collect_leaderboards_simple():
-    with lock:
-        db = load_db()
-        rows = []
-        for u, doc in (db.get("users") or {}).items():
-            prog = (doc or {}).get("progress") or {}
-            rows.append({
-                "user": u,
-                "count": float(prog.get("count") or 0.0),
-                "cps":   float(prog.get("cps")   or 0.0),
-            })
-    top_count = sorted(rows, key=lambda r: r["count"], reverse=True)[:50]
-    top_cps   = sorted(rows, key=lambda r: r["cps"],   reverse=True)[:50]"""
-    return top_count, top_cps
+    """
 
 @app.get("/api/leaderboard")
 def api_leaderboard():
