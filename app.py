@@ -22,7 +22,7 @@ app.secret_key = _get_secret_key()
 # optional, but nice defaults for browser cookies
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=False,   # set True if you’re on HTTPS only
+    SESSION_COOKIE_SECURE=False,   # set True if your in https only:
 )
 
 
@@ -70,6 +70,34 @@ def save_db(db):
         json.dump(db, f, ensure_ascii=False, indent=2)
     os.replace(tmp, DB_PATH)  # atomic on POSIX
 
+    def _tick_bots(db, rate_per_hour=0.001):
+      """
+      +0.10%/h composés sur progress['count'] pour les comptes marqués bot.
+      Nécessite doc['bot']=True et doc['bot_tick']=timestamp.
+      """
+    now = time.time()
+    changed = False
+    for _, doc in (db.get("users") or {}).items():
+        if not doc.get("bot"):
+            continue
+        last = float(doc.get("bot_tick") or now)
+        dt_h = max(0.0, (now - last) / 3600.0)
+        if dt_h <= 0:
+            continue
+
+        prog = doc.get("progress") or {}
+        cur = float(prog.get("count") or 0.0)
+        if cur > 0.0:
+            prog["count"] = cur * ((1.0 + rate_per_hour) ** dt_h)
+            doc["progress"] = prog
+            changed = True
+
+        doc["bot_tick"] = now
+
+    if changed:
+        save_db(db)
+
+
 
 def is_authed(): return bool(session.get("user"))
 def is_admin():  return session.get("user","").lower() == ADMIN_USERNAME
@@ -103,7 +131,7 @@ STR = {
     "tip":"Tip: for A², B is ignored.",
     "admin":"Admin Panel",
     "users":"Users",
-    "actions":"Actions",
+    "actions":"Actions",    
     "reset_pw":"Reset password",
     "new_pw":"New password",
     "add_aut":"Add autists",
@@ -316,9 +344,9 @@ def home():
     get_lang()
     import html
     with lock:
-        _db = load_db()
-        update_txt = (_db.get("settings", {}) or {}).get("update", "")
-    update_txt = html.escape(update_txt)
+      _db = load_db()
+      _tick_bots(_db)  # tick bots à chaque visite de /
+    update_txt = (_db.get("settings", {}) or {}).get("update", "")
     a_str = request.form.get("a","")
     b_str = request.form.get("b","")
     op = request.form.get("op","add")
@@ -963,18 +991,23 @@ def profile_page():
 <script>
 function fmt(n){
   n = Number(n)||0;
-    const s = [
+  const scales = [
     [1e75,'qavg'],[1e72,'tvg'],[1e69,'dvg'],[1e66,'uvg'],[1e63,'vg'],
-    [1e60,'nd'],  [1e57,'od'], [1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
-    [1e45,'qad'], [1e42,'td'], [1e39,'dd'], [1e36,'ud'], [1e33,'de'],
-    [1e30,'no'],  [1e27,'oc'], [1e24,'sp'], [1e21,'sx'], [1e18,'qi'],
-    [1e15,'qa'],  [1e12,'t'],  [1e9,'b'],   [1e6,'m'],   [1e3,'k']
+    [1e60,'nd'],[1e57,'od'],[1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
+    [1e45,'qad'],[1e42,'td'],[1e39,'dd'],[1e36,'ud'],[1e33,'de'],
+    [1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],[1e18,'qi'],
+    [1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']
   ];
-    if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
+  for (const [div,suf] of scales){
+    if (Math.abs(n) >= div){
+      const val = (n/div).toFixed(2).replace(/\.00$/,'').replace(/(\.\d*[1-9])0$/,'$1');
+      return val + suf;
+    }
+  }
+  if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
   return String(Math.trunc(n));
-  if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+", "");
-
 }
+
 function param(n){ return new URLSearchParams(location.search).get(n)||''; }
 
 function renderProfile(p, isSelf){
@@ -1577,10 +1610,13 @@ def seed_bots(n=25, overwrite_existing=False, max_total=200):
             if (name in users) and not overwrite_existing:
                 continue
             users[name] = {
-                "pw": generate_password_hash(secrets.token_hex(8)),  # random pw
-                "progress": _fake_progress(),
-                "prestige": _empty_prestige(),
-            }
+    "pw": generate_password_hash(secrets.token_hex(8)),
+    "progress": _fake_progress(),
+    "prestige": _empty_prestige(),
+    "bot": True,
+    "bot_tick": int(time.time()),
+}
+
             created += 1
             if len(users) >= max_total:
                 break
@@ -1607,6 +1643,8 @@ def seed_fake_reviews(m=40):
         db["reviews"] = db["reviews"][-1000:]
         save_db(db)
         return m
+
+
 
 # Admin-only HTTP triggers
 @app.post("/admin/seed_bots")
@@ -1668,6 +1706,9 @@ def api_me():
 # ---------- Clicker ----------
 @app.get("/clicker")  
 def clicker():
+    with lock:
+      db = load_db()
+      _tick_bots(db)
     return """
 <!doctype html><meta charset="utf-8"><title>Autists Clicker</title>
 <style>
@@ -1757,7 +1798,6 @@ def clicker():
   <div class="row" style="margin:12px 0;justify-content:center">
     <button id="btn_save"  class="btn green">Upload</button>
     <button id="btn_load"  class="btn blue">Load</button>
-    <button id="btn_reset" class="btn">Reset local</button>
     <button id="btn_sync_shop" class="btn blue">Sync Shop</button>
     <span id="sync_msg" class="pill">…</span>
   </div>
@@ -2603,7 +2643,6 @@ document.getElementById("btn_ach").onclick = openAch;
 document.getElementById("ach_close").onclick = closeAch;
 document.getElementById("ach_backdrop").onclick = closeAch;
 document.getElementById("btn_load").onclick=loadServer;
-document.getElementById("btn_reset").onclick=()=>{ localStorage.removeItem("autistes_clicker"); count=0; shop=JSON.parse(JSON.stringify(DEFAULT_SHOP)); recalc(); update(); };
 
 // Sync shop without reset
 function syncShopWithDefaults(){
@@ -2900,6 +2939,7 @@ def _collect_leaderboards_simple():
 def api_leaderboard():
     with lock:
         db = load_db()
+        _tick_bots(db)  # tick avant de lire les scores
         users = db.get("users", {}) or {}
         rows = []
         for name, doc in users.items():
@@ -2918,12 +2958,12 @@ def api_leaderboard():
         top_count = sorted(rows, key=lambda x: x["count"], reverse=True)[:50]
         top_cps   = sorted(rows, key=lambda x: x["cps"],   reverse=True)[:50]
 
-    return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})
+    return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})"""
 
-"""
+
 @app.get("/leaderboard")
 def leaderboard_page():
-    page = """<!doctype html><meta charset="utf-8"><title>Leaderboard</title>
+    page = r"""<!doctype html><meta charset="utf-8"><title>Leaderboard</title>
     <style>
       :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
       *{box-sizing:border-box} body{font-family:Inter,Arial;background:
@@ -2969,24 +3009,25 @@ def leaderboard_page():
     </div>
 
     <script>
-      function fmt(n){
-        n = Number(n)||0;
-          const s = [
+     function fmt(n){
+  n = Number(n)||0;
+  const scales = [
     [1e75,'qavg'],[1e72,'tvg'],[1e69,'dvg'],[1e66,'uvg'],[1e63,'vg'],
-    [1e60,'nd'],  [1e57,'od'], [1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
-    [1e45,'qad'], [1e42,'td'], [1e39,'dd'], [1e36,'ud'], [1e33,'de'],
-    [1e30,'no'],  [1e27,'oc'], [1e24,'sp'], [1e21,'sx'], [1e18,'qi'],
-    [1e15,'qa'],  [1e12,'t'],  [1e9,'b'],   [1e6,'m'],   [1e3,'k']
+    [1e60,'nd'],[1e57,'od'],[1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
+    [1e45,'qad'],[1e42,'td'],[1e39,'dd'],[1e36,'ud'],[1e33,'de'],
+    [1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],[1e18,'qi'],
+    [1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']
   ];
-        for (const [div,suf] of scales){
-          if (Math.abs(n) >= div){
-            const val = (n/div).toFixed(2).replace(/\\.00$/,'').replace(/(\\.\\d*[1-9])0$/,'$1');
-            return val + suf;
-          }
-        }
-          if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
-        return String(Math.trunc(n));
-      }
+  for (const [div,suf] of scales){
+    if (Math.abs(n) >= div){
+      const val = (n/div).toFixed(2).replace(/\.00$/,'').replace(/(\.\d*[1-9])0$/,'$1');
+      return val + suf;
+    }
+  }
+  if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
+  return String(Math.trunc(n));
+}
+
 
 function renderTable(tbody, rows, key){
   tbody.innerHTML = '';
@@ -3099,14 +3140,17 @@ def any_route(_):
 if __name__ == "__main__":
     with lock:
         db = load_db()
-        db.setdefault("settings", {"bg":None,"logo":None})
         users = db.setdefault("users", {})
-        if not users:  # first boot → make some entries so LB shows data
+        if not users:  # premier démarrage -> seed pour voir quelque chose sur le LB
             for _ in range(15):
                 name = _rand_username()
                 users[name] = {
                     "pw": generate_password_hash(secrets.token_hex(8)),
                     "progress": _fake_progress(),
                     "prestige": _empty_prestige(),
+                    "bot": True,
+                    "bot_tick": int(time.time()),
                 }
         save_db(db)
+    # démarre le serveur si tu lances `python app.py`
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
