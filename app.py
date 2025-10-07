@@ -1767,10 +1767,11 @@ def api_me():
 def clicker():
     lang = get_lang()
     with lock:
-      db = load_db()
-      _tick_bots(db)
-    html = """
-<!doctype html><meta charset="utf-8"><title>Autists Clicker</title>
+        db = load_db()
+        _tick_bots(db)
+
+    # OPEN the one-and-only triple-quoted string
+    html = """<!doctype html><meta charset="utf-8"><title>Autists Clicker</title>
 <style>
   :root{
     --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --muted:#b6b6c6; --border:#232334;
@@ -1782,7 +1783,7 @@ def clicker():
      #000;color:#eee;margin:0;padding:18px}
   .wrap{max-width:1000px;margin:0 auto;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);padding:16px;border-radius:22px;box-shadow:0 0 60px rgba(124,58,237,.08)}
   .row{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
-    /* toolbar layout (desktop + mobile) */
+  /* toolbar layout (desktop + mobile) */
   .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .toolbar-left,.toolbar-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   @media (max-width:700px){
@@ -1813,7 +1814,8 @@ def clicker():
 @media (min-width:800px){ #ach_list{grid-template-columns:1fr 1fr} }
 .ach{border:1px solid #2b2d4a;border-radius:12px;padding:10px;background:#121322;display:flex;justify-content:space-between;gap:8px}
 .ach.ok{border-color:#2f9657;background:#142016}
-  </style>
+</style>
+
 <div id="topbar" class="toolbar">
   <div class="toolbar-left" style="gap:8px">
     <button class="btn" onclick="setLang('fr')">Français</button>
@@ -1830,7 +1832,61 @@ def clicker():
   </div>
 </div>
 
+<!-- >>> PASTE THE REST OF YOUR PAGE HERE, UNCHANGED
+     This includes the section in your screenshot:
+     - <!-- Public Update box -->
+     - <!-- Rating summary -->
+     - statgrid, click button, save/load buttons
+     - prestige, shop, reviews
+     - achievements modal
+     - console
+     - ALL the big <script> blocks
+     and keep going until the very last closing </script> of the page. <<< -->
 
+</script>
+"""  # CLOSE the string ONLY once, here, after the final </script>
+
+    # Post-process language/labels safely (not an f-string)
+    html = html.replace('let LANG="fr";', f'let LANG="{lang}";')
+    html = html.replace('setLang("fr");', f'setLang("{lang}");')
+    html = html.replace(
+        'function setLang(l){ LANG = LANGS[l]?l:"fr"; applyLang(); update(); }',
+        """function setLang(l){
+  if(!LANGS[l]){return;}
+  const same = LANG === l;
+  LANG = l;
+  applyLang();
+  update();
+  if(same){ return; }
+  fetch(`/lang?to=${l}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}}).catch(()=>{});
+}"""
+    )
+    html = html.replace(
+        '  document.getElementById("lbl_shop").textContent = t("shop");\n  document.getElementById("c_msg").textContent = "";\n  const clickBtn=document.getElementById("click");\n  if(clickBtn) clickBtn.firstChild.nodeValue = t("click");\n  document.getElementById("cps_click").textContent = formatNum(cpsClick);\n  document.getElementById("rev_send").onclick = postReview;\n}',
+        """  document.getElementById("lbl_shop").textContent = t("shop");
+  document.getElementById("c_msg").textContent = "";
+  const clickBtn=document.getElementById("click");
+  if(clickBtn) clickBtn.firstChild.nodeValue = t("click");
+  document.getElementById("cps_click").textContent = formatNum(cpsClick);
+  document.getElementById("rev_send").onclick = postReview;
+  const navLeader = document.getElementById("nav_leaderboard");
+  if(navLeader) navLeader.textContent = `🏆 ${t("leaderboard")}`;
+  const navProfile = document.getElementById("nav_profile");
+  if(navProfile) navProfile.textContent = `👤 ${t("profile")}`;
+  const navHome = document.getElementById("nav_home");
+  if(navHome) navHome.textContent = `← ${t("home")}`;
+  const navLogin = document.getElementById("nav_login");
+  if(navLogin) navLogin.textContent = t("login");
+  const navRegister = document.getElementById("nav_register");
+  if(navRegister) navRegister.textContent = t("register");
+}"""
+    )
+
+    return html
+
+
+
+    html += r'''
   <h1 id="title" style="text-align:center;margin:10px 0;letter-spacing:.5px;text-shadow:0 0 18px rgba(124,58,237,.35)">Autists Clicker</h1>
 
     <!-- Public Update box -->
@@ -1946,6 +2002,8 @@ def clicker():
 
 
 <script>
+'''
+
 // ===== i18n (client EN/FR) =====
 const LANGS = {
   fr:{shop:"Boutique",count:"Autistes",cps:"a/s",click:"+1 Autiste",create:"Créer un Autiste custom (coût: 1000)",level:"Niveau",cost:"Coût",buy:"Acheter",sell:"Vendre",upload:"Uploader vers mon compte",load:"Charger depuis mon compte",reset:"Reset local",leaderboard:"Classement",profile:"Profil",home:"Accueil",login:"Connexion",register:"Inscription",not_enough:"Pas assez d’autistes (1000 requis).",invalid:"Nom + coût valide (≥ 10) requis.",created:(u)=>`Créé: ${u.name} — base ${formatNum(u.base)}, ~${formatNum(u.inc)}/s (aléatoire).`},
@@ -3176,41 +3234,6 @@ def disclaimer():
   </div>
 </div>
 """
-    html = html.replace('let LANG="fr";', f'let LANG="{lang}";')
-    html = html.replace('setLang("fr");', f'setLang("{lang}");')
-    html = html.replace(
-        'function setLang(l){ LANG = LANGS[l]?l:"fr"; applyLang(); update(); }',
-        """function setLang(l){
-  if(!LANGS[l]){return;}
-  const same = LANG === l;
-  LANG = l;
-  applyLang();
-  update();
-  if(same){ return; }
-  fetch(`/lang?to=${l}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}}).catch(()=>{});
-}"""
-    )
-    html = html.replace(
-        '  document.getElementById("lbl_shop").textContent = t("shop");\n  document.getElementById("c_msg").textContent = "";\n  const clickBtn=document.getElementById("click");\n  if(clickBtn) clickBtn.firstChild.nodeValue = t("click");\n  document.getElementById("cps_click").textContent = formatNum(cpsClick);\n  document.getElementById("rev_send").onclick = postReview;\n}',
-        """  document.getElementById(\"lbl_shop\").textContent = t(\"shop\");
-  document.getElementById(\"c_msg\").textContent = \"\";
-  const clickBtn=document.getElementById(\"click\");
-  if(clickBtn) clickBtn.firstChild.nodeValue = t(\"click\");
-  document.getElementById(\"cps_click\").textContent = formatNum(cpsClick);
-  document.getElementById(\"rev_send\").onclick = postReview;
-  const navLeader = document.getElementById(\"nav_leaderboard\");
-  if(navLeader) navLeader.textContent = `🏆 ${t(\"leaderboard\")}`;
-  const navProfile = document.getElementById(\"nav_profile\");
-  if(navProfile) navProfile.textContent = `👤 ${t(\"profile\")}`;
-  const navHome = document.getElementById(\"nav_home\");
-  if(navHome) navHome.textContent = `← ${t(\"home\")}`;
-  const navLogin = document.getElementById(\"nav_login\");
-  if(navLogin) navLogin.textContent = t(\"login\");
-  const navRegister = document.getElementById(\"nav_register\");
-  if(navRegister) navRegister.textContent = t(\"register\");
-}"""
-    )
-    return html
 
 
 @app.get("/<path:_>")
