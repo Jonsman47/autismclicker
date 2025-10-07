@@ -28,7 +28,11 @@ app.config.update(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, os.environ.get("DB_PATH", "db.json"))
-UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
+_upload_root = os.environ.get("UPLOAD_DIR", "uploads")
+if os.path.isabs(_upload_root):
+    UPLOAD_DIR = _upload_root
+else:
+    UPLOAD_DIR = os.path.join(BASE_DIR, _upload_root)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 lock = threading.Lock()
@@ -71,31 +75,31 @@ def save_db(db):
     os.replace(tmp, DB_PATH)  # atomic on POSIX
 
 def _tick_bots(db, rate_per_hour=0.001):
-  """
-  +0.10%/h composés sur progress['count'] pour les comptes marqués bot.
-  Nécessite doc['bot']=True et doc['bot_tick']=timestamp.
-  """
-now = time.time()
-changed = False
-for _, doc in (db.get("users") or {}).items():
-    if not doc.get("bot"):
-        continue
-    last = float(doc.get("bot_tick") or now)
-    dt_h = max(0.0, (now - last) / 3600.0)
-    if dt_h <= 0:
-        continue
+    """
+    +0.10%/h composés sur progress['count'] pour les comptes marqués bot.
+    Nécessite doc['bot']=True et doc['bot_tick']=timestamp.
+    """
+    now = time.time()
+    changed = False
+    for _, doc in (db.get("users") or {}).items():
+        if not doc.get("bot"):
+            continue
+        last = float(doc.get("bot_tick") or now)
+        dt_h = max(0.0, (now - last) / 3600.0)
+        if dt_h <= 0:
+            continue
 
-    prog = doc.get("progress") or {}
-    cur = float(prog.get("count") or 0.0)
-    if cur > 0.0:
-        prog["count"] = cur * ((1.0 + rate_per_hour) ** dt_h)
-        doc["progress"] = prog
-        changed = True
+        prog = doc.get("progress") or {}
+        cur = float(prog.get("count") or 0.0)
+        if cur > 0.0:
+            prog["count"] = cur * ((1.0 + rate_per_hour) ** dt_h)
+            doc["progress"] = prog
+            changed = True
 
-    doc["bot_tick"] = now
+        doc["bot_tick"] = now
 
-if changed:
-    save_db(db)
+    if changed:
+        save_db(db)
 
 
 
@@ -197,7 +201,7 @@ def compact(n):
     except:
         return str(n)
     # short scale jusqu’à 1e33
-       # short scale up to 1e75 (then fallback to scientific)
+    # short scale up to 1e75 (then fallback to scientific)
     scales = [
         (1e75, "qavg"),  # quattuorvigintillion
         (1e72, "tvg"),   # tresvigintillion
@@ -227,13 +231,13 @@ def compact(n):
     ]
 
     for div, suf in scales:
-      if abs(n) >= div:
-          val = n / div
-          # keep up to 2 decimals but remove useless zeros and dot
-          s = f"{val:.2f}".rstrip("0").rstrip(".")
-          return f"{s}{suf}"
+        if abs(n) >= div:
+            val = n / div
+            # keep up to 2 decimals but remove useless zeros and dot
+            s = f"{val:.2f}".rstrip("0").rstrip(".")
+            return f"{s}{suf}"
 
-  # scientific fallback for ultra-large values
+    # scientific fallback for ultra-large values
     if abs(n) >= 1e6:
         s = f"{n:.2e}".replace("e+0", "e").replace("e+", "e")
         return s
@@ -282,10 +286,10 @@ def register_post():
         db = load_db()
         if u in db["users"]: return "Username taken", 400
         db["users"][u] = {
-    "pw": generate_password_hash(p),
-    "progress": None,
-    "prestige": _empty_prestige()
-}
+            "pw": generate_password_hash(p),
+            "progress": None,
+            "prestige": _empty_prestige()
+        }
         save_db(db)
     session["user"] = u
     return redirect("/")
@@ -344,8 +348,8 @@ def home():
     get_lang()
     import html
     with lock:
-      _db = load_db()
-      _tick_bots(_db)  # tick bots à chaque visite de /
+        _db = load_db()
+        _tick_bots(_db)  # tick bots à chaque visite de /
     update_txt = (_db.get("settings", {}) or {}).get("update", "")
     a_str = request.form.get("a","")
     b_str = request.form.get("b","")
@@ -372,7 +376,21 @@ def home():
 
     user = session.get("user")
     admin_link = f'<a class="btn solid warn" href="/admin">{T("admin")}</a>' if is_admin() else ""
-    res_fmt = compact(res) if isinstance(res,(int,float)) or (isinstance(res,str) and res.replace(".","",1).isdigit()) else res
+    admin_html = f"<span style='margin-left:8px'></span>{admin_link}" if admin_link else ""
+    if user:
+        user_html = (
+            f"{T('logged_in_as')}: <b>{html.escape(str(user))}</b> "
+            f"<a class=\"btn\" href=\"/logout\">{T('logout')}</a>"
+        )
+    else:
+        user_html = (
+            f"{T('not_logged_in')} | "
+            f"<a class=\"btn\" href=\"/register\">{T('register')}</a> "
+            f"<a class=\"btn\" href=\"/login\">{T('login')}</a>"
+        )
+    res_fmt = compact(res) if isinstance(res, (int, float)) or (isinstance(res, str) and res.replace(".", "", 1).isdigit()) else res
+    res_html = html.escape(str(res_fmt))
+    update_html = html.escape(update_txt)
 
     return f"""<!doctype html><meta charset="utf-8"><title>{T('title_home')}</title>
     <style>
@@ -407,7 +425,7 @@ def home():
     <h2 style="margin-top:0">Public Update Note</h2>
     <form method="post" action="/admin/set_update" class="grid" style="grid-template-columns:1fr">
   <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:"
-    style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_txt}</textarea>
+    style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_html}</textarea>
   <div class="row" style="margin-top:8px;justify-content:flex-end">
     <button class="btn solid" type="submit">Save</button>
   </div>
@@ -423,7 +441,7 @@ def home():
   <div class="toolbar-right">
     <a class="btn" href="/lang?to=en">{T('change_en')}</a>
     <a class="btn" href="/lang?to=fr">{T('change_fr')}</a>
-    {"<span style='margin-left:8px'></span>"+admin_link if admin_link else ""}
+    {admin_html}
   </div>
 </div>
 
@@ -431,8 +449,7 @@ def home():
       <div class="panel" style="text-align:center">
         <h1 style="margin:8px 0; letter-spacing:.5px">{T('title_home')}</h1>
         <div style="margin:8px 0">
-          <span>{(T('logged_in_as')+': <b>'+str(user)+'</b> <a class=\"btn\" href=\"/logout\">'+T('logout')+'</a>') if user else T('not_logged_in')}</span>
-          {' | <a class="btn" href="/register">'+T('register')+'</a> <a class="btn" href="/login">'+T('login')+'</a>' if not user else ''}
+          <span>{user_html}</span>
         </div>
       </div>
 
@@ -456,7 +473,7 @@ def home():
           </label>
           <button class="solid" type="submit" style="font-size:18px">{T('compute')}</button>
         </form>
-        <p style="margin-top:10px;font-size:20px"><b>{T('total')}:</b> {res_fmt}</p>
+        <p style="margin-top:10px;font-size:20px"><b>{T('total')}:</b> {res_html}</p>
         <p class="pill">{T('tip')}</p>
       </div>
     </div>"""
@@ -3074,83 +3091,84 @@ def leaderboard_page():
     """
 
 
-  # ---------- catch-all ----------
-  # ---------- Respect / Inclusion (FR + EN) ----------
-  @app.get("/disclaimer")
-  def disclaimer():
-      return """
-  <!doctype html><meta charset="utf-8"><title>Respect & Inclusion</title>
-  <style>
-    :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
-    *{box-sizing:border-box} body{font-family:Inter,Arial;background:
-      radial-gradient(900px 400px at 0% -10%, rgba(124,58,237,.25), transparent 60%),
-      radial-gradient(900px 500px at 120% 10%, rgba(239,68,68,.18), transparent 65%),
-      #000; color:var(--ink); margin:0; padding:24px}
-    .wrap{max-width:900px;margin:0 auto}
-    .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 0 40px rgba(124,58,237,.08)}
-    a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none;background:#141625}
-    .muted{color:#9aa0a6}
-  </style>
+# ---------- catch-all ----------
+# ---------- Respect / Inclusion (FR + EN) ----------
+@app.get("/disclaimer")
+def disclaimer():
+    return """
+<!doctype html><meta charset="utf-8"><title>Respect & Inclusion</title>
+<style>
+  :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
+  *{box-sizing:border-box} body{font-family:Inter,Arial;background:
+    radial-gradient(900px 400px at 0% -10%, rgba(124,58,237,.25), transparent 60%),
+    radial-gradient(900px 500px at 120% 10%, rgba(239,68,68,.18), transparent 65%),
+    #000; color:var(--ink); margin:0; padding:24px}
+  .wrap{max-width:900px;margin:0 auto}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 0 40px rgba(124,58,237,.08)}
+  a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none;background:#141625}
+  .muted{color:#9aa0a6}
+</style>
+
+<div class="card">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <h1 style="margin:0">Respect & Inclusion</h1>
+    </div>
+    <div class="toolbar-right">
+      <a class="btn" href="/">← Home</a>
+      <a class="btn" href="/clicker">🎮 Clicker</a>
+      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+    </div>
+  </div>
+</div>
+
 
   <div class="card">
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <h1 style="margin:0">Respect & Inclusion</h1>
-      </div>
-      <div class="toolbar-right">
-        <a class="btn" href="/">← Home</a>
-        <a class="btn" href="/clicker">🎮 Clicker</a>
-        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
-      </div>
-    </div>
+    <h2 style="margin:.2rem 0">FR — Note de respect</h2>
+    <p>
+      Ce jeu ne se moque d’aucun groupe de personnes. Il n’a pas pour but
+      d’insulter, de stigmatiser ou de dénigrer les personnes autistes ou
+      toute personne en situation de handicap. Le ton est parodique/arcade.
+      Si un contenu vous met mal à l’aise, dites-le nous et nous l’ajusterons.
+    </p>
   </div>
 
-
-    <div class="card">
-      <h2 style="margin:.2rem 0">FR — Note de respect</h2>
-      <p>
-        Ce jeu ne se moque d’aucun groupe de personnes. Il n’a pas pour but
-        d’insulter, de stigmatiser ou de dénigrer les personnes autistes ou
-        toute personne en situation de handicap. Le ton est parodique/arcade.
-        Si un contenu vous met mal à l’aise, dites-le nous et nous l’ajusterons.
-      </p>
-    </div>
-
-    <div class="card">
-      <h2 style="margin:.2rem 0">EN — Respect note</h2>
-      <p>
-        This game does not mock any group of people. It is not intended to insult,
-        stigmatize, or demean autistic people or anyone with disabilities.
-        The tone is parody/arcade. If something feels off, please tell us and
-        we’ll adjust.
-      </p>
-    </div>
-
-    <div class="card muted">
-      Merci / Thank you for playing ♥
-    </div>
+  <div class="card">
+    <h2 style="margin:.2rem 0">EN — Respect note</h2>
+    <p>
+      This game does not mock any group of people. It is not intended to insult,
+      stigmatize, or demean autistic people or anyone with disabilities.
+      The tone is parody/arcade. If something feels off, please tell us and
+      we’ll adjust.
+    </p>
   </div>
-  """
+
+  <div class="card muted">
+    Merci / Thank you for playing ♥
+  </div>
+</div>
+"""
 
 
-  @app.get("/<path:_>")
-  def any_route(_):
-      return redirect("/")
+@app.get("/<path:_>")
+def any_route(_):
+    return redirect("/")
 
-  if __name__ == "__main__":
-      with lock:
-          db = load_db()
-          users = db.setdefault("users", {})
-          if not users:  # premier démarrage -> seed pour voir quelque chose sur le LB
-              for _ in range(15):
-                  name = _rand_username()
-                  users[name] = {
-                      "pw": generate_password_hash(secrets.token_hex(8)),
-                      "progress": _fake_progress(),
-                      "prestige": _empty_prestige(),
-                      "bot": True,
-                      "bot_tick": int(time.time()),
-                  }
-          save_db(db)
-      # démarre le serveur si tu lances `python app.py`
-      app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+if __name__ == "__main__":
+    with lock:
+        db = load_db()
+        users = db.setdefault("users", {})
+        if not users:  # premier démarrage -> seed pour voir quelque chose sur le LB
+            for _ in range(15):
+                name = _rand_username()
+                users[name] = {
+                    "pw": generate_password_hash(secrets.token_hex(8)),
+                    "progress": _fake_progress(),
+                    "prestige": _empty_prestige(),
+                    "bot": True,
+                    "bot_tick": int(time.time()),
+                }
+        save_db(db)
+    # démarre le serveur si tu lances `python app.py`
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
