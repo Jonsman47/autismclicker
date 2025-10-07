@@ -351,10 +351,12 @@ def home():
     </style>
     <div class="container">
           <div class="card">
-        <h2 style="margin-top:0">Public Update Note</h2>
-        <form method="post" action="/admin/set_update" class="grid" style="grid-template-columns:1fr">
-          <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:" style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_txt}</textarea>
-      </div>
+    <h2 style="margin-top:0">Public Update Note</h2>
+    <form method="post" action="/admin/set_update" class="grid" style="grid-template-columns:1fr">
+      <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:"
+        style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_txt}</textarea>
+    </form>
+  </div>
       <div class="toolbar">
   <div class="toolbar-left">
     <a class="btn solid" href="/clicker">🎮 {T('goto_clicker')}</a>
@@ -2525,7 +2527,7 @@ setInterval(()=>{
   saveLocal();
 },1000);
 </script>
-"""
+
 
 <script>
 // ===== Mini Console =====
@@ -2764,7 +2766,7 @@ def api_leaderboard():
 
     return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})
 
-
+"""
 @app.get("/leaderboard")
 def leaderboard_page():
     page = """<!doctype html><meta charset="utf-8"><title>Leaderboard</title>
@@ -2950,4 +2952,3 @@ if __name__ == "__main__":
                     "prestige": _empty_prestige(),
                 }
         save_db(db)
-
