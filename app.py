@@ -5,7 +5,26 @@ from werkzeug.utils import secure_filename
 import os, json, threading, secrets, time
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(16))
+
+def _get_secret_key():
+    path = os.environ.get("SECRET_FILE", "secret.key")
+    env = os.environ.get("SECRET_KEY")
+    if env:
+        return env
+    if os.path.exists(path):
+        return open(path, "rb").read()
+    key = secrets.token_hex(32).encode()
+    with open(path, "wb") as f:
+        f.write(key)
+    return key
+
+app.secret_key = _get_secret_key()
+# optional, but nice defaults for browser cookies
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=False,   # set True if you’re on HTTPS only
+)
+
 
 DB_PATH = "db.json"
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
@@ -1001,7 +1020,7 @@ def _rand_username():
 
 def _fake_progress():
     # Roughly log-normal-ish spread so a few are huge, most are small:
-    cps = max(0.0, round(random.expovariate(1/2_000_000) * 1_000_000_000_000_000_000, 2))  # avg ~2M cps
+    cps = max(0.0, round(random.expovariate(1/2_000_000) * 1_000_000_000_000_000_000 , 2))  # avg ~2M cps
     count = max(cps * random.uniform(50, 300), random.uniform(1e3, 1e24))
     return {
         "v": 5,
@@ -1144,7 +1163,7 @@ def clicker():
   .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--btn);color:var(--btnTxt);text-decoration:none;cursor:pointer;transition:transform .05s ease}
   .btn:active{transform:scale(.98)}
   .btn.orange{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed}
-  .btn.blue{backround:#27284a;border-color:#2d2f58}
+  .btn.blue{background:#27284a;border-color:#2d2f58}
   .btn.green{background:#1f3b28;border-color:#2c5a39}
   .btn.red{background:#3a1f1f;border-color:#4a2a2a}
   .pill{padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:#cfcfe8;background:#11121c}
@@ -1720,20 +1739,47 @@ document.getElementById("c_make").onclick=()=>{
 
 // ===== Server sync =====
 async function saveServer(){
-  const payload={ v:5, count, cps, shop };
-  const r=await fetch("/api/save_progress",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-  const j=await r.json().catch(()=>({}));
-  document.getElementById("sync_msg").textContent=j.ok?"✓":"x";
+  const payload = { v:5, count, cps, shop };
+  try{
+    const r = await fetch("/api/save_progress",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      credentials:"same-origin",
+      body: JSON.stringify(payload)
+    });
+    if (r.status === 401){
+      document.getElementById("sync_msg").textContent = "Login first";
+      return;
+    }
+    const j = await r.json().catch(()=>({}));
+    document.getElementById("sync_msg").textContent = j.ok ? "✓" : "x";
+  }catch(e){
+    document.getElementById("sync_msg").textContent = "network x";
+  }
 }
+
 async function loadServer(){
-  const r=await fetch("/api/load_progress"); const j=await r.json().catch(()=>({}));
-  if(j.ok && j.progress){
-    const p=j.progress;
-    count=Number(p.count)||0; cps=Number(p.cps)||0;
-    if(Array.isArray(p.shop)) shop=p.shop;
-    update(); saveLocal(); document.getElementById("sync_msg").textContent="✓";
-  } else { document.getElementById("sync_msg").textContent="x"; }
+  try{
+    const r = await fetch("/api/load_progress",{ credentials:"same-origin" });
+    if (r.status === 401){
+      document.getElementById("sync_msg").textContent = "Login first";
+      return;
+    }
+    const j = await r.json().catch(()=>({}));
+    if (j.ok && j.progress){
+      const p = j.progress;
+      count = Number(p.count)||0; cps = Number(p.cps)||0;
+      if (Array.isArray(p.shop)) shop = p.shop;
+      update(); saveLocal();
+      document.getElementById("sync_msg").textContent = "✓";
+    } else {
+      document.getElementById("sync_msg").textContent = "x";
+    }
+  }catch(e){
+    document.getElementById("sync_msg").textContent = "network x";
+  }
 }
+
 
 async function awaitPrestige(){
   try{
@@ -1873,6 +1919,19 @@ async function applySettings(){
 
 let ME = { is_admin: false, user: null };
 
+function setAuthUI(){
+  const saveBtn = document.getElementById("btn_save");
+  const loadBtn = document.getElementById("btn_load");
+  const msg = document.getElementById("sync_msg");
+  if (ME.user){
+    saveBtn.disabled = false; loadBtn.disabled = false;
+  }else{
+    saveBtn.disabled = true; loadBtn.disabled = true;
+    msg.textContent = "Login to sync";
+  }
+}
+
+
 async function loadMe(){
   try{
     const r = await fetch("/api/me", {cache:"no-store"});
@@ -1893,7 +1952,7 @@ recalc();
 render();
 loadUpdateBox();
 loadReviewSummary();
-loadMe().then(loadReviews);  // ← chaîné
+loadMe().then(()=>{ setAuthUI(); return loadReviews(); });  // auth-gated UI
 awaitPrestige().then(()=>{
   // apply start boost only if fresh (local count==0 and no shop levels)
   const anyLvl = shop.some(s=> (s.lvl||0) > 0);
