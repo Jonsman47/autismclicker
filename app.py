@@ -354,6 +354,7 @@ def home():
         <div class="row">
           <a class="btn solid" href="/clicker">🎮 {T('goto_clicker')}</a>
           <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+          <a class="btn" href="/disclaimer">ℹ️ Respect</a>
         </div>
         <div class="row">
           <a class="btn" href="/lang?to=en">{T('change_en')}</a>
@@ -844,6 +845,7 @@ def admin_panel():
         <h1 style="margin:4px 0">{T('admin')}</h1>
         <div class="row">
           <a class="btn" href="/">← Home</a>
+          <a class="btn" href="/disclaimer">ℹ️ Respect</a>
           <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
         </div>
       </div>
@@ -2126,6 +2128,60 @@ function renderTable(tbody, rows, key){
     return page
 
 # ---------- catch-all ----------
+# ---------- Respect / Inclusion (FR + EN) ----------
+@app.get("/disclaimer")
+def disclaimer():
+    return """
+<!doctype html><meta charset="utf-8"><title>Respect & Inclusion</title>
+<style>
+  :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
+  *{box-sizing:border-box} body{font-family:Inter,Arial;background:
+    radial-gradient(900px 400px at 0% -10%, rgba(124,58,237,.25), transparent 60%),
+    radial-gradient(900px 500px at 120% 10%, rgba(239,68,68,.18), transparent 65%),
+    #000; color:var(--ink); margin:0; padding:24px}
+  .wrap{max-width:900px;margin:0 auto}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 0 40px rgba(124,58,237,.08)}
+  a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none;background:#141625}
+  .muted{color:#9aa0a6}
+</style>
+
+<div class="wrap">
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+    <h1 style="margin:0">Respect & Inclusion</h1>
+    <div style="display:flex;gap:8px">
+      <a class="btn" href="/">← Home</a>
+      <a class="btn" href="/clicker">🎮 Clicker</a>
+      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:.2rem 0">FR — Note de respect</h2>
+    <p>
+      Ce jeu ne se moque d’aucun groupe de personnes. Il n’a pas pour but
+      d’insulter, de stigmatiser ou de dénigrer les personnes autistes ou
+      toute personne en situation de handicap. Le ton est parodique/arcade.
+      Si un contenu vous met mal à l’aise, dites-le nous et nous l’ajusterons.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:.2rem 0">EN — Respect note</h2>
+    <p>
+      This game does not mock any group of people. It is not intended to insult,
+      stigmatize, or demean autistic people or anyone with disabilities.
+      The tone is parody/arcade. If something feels off, please tell us and
+      we’ll adjust.
+    </p>
+  </div>
+
+  <div class="card muted">
+    Merci / Thank you for playing ♥
+  </div>
+</div>
+"""
+
+
 @app.get("/<path:_>")
 def any_route(_):
     return redirect("/")
