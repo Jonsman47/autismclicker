@@ -353,20 +353,18 @@ def home():
           <div class="card">
         <h2 style="margin-top:0">Public Update Note</h2>
         <form method="post" action="/admin/set_update" class="grid" style="grid-template-columns:1fr">
-          <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:" style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">%s</textarea>
-          <div><button class="btn ok">Save Update</button></div>
-        </form>
+          <textarea name="update" rows="8" placeholder="Update 1.2.1:\nBug fixes ...\nAdded Features:" style="width:100%;border-radius:12px;border:1px solid var(--border);padding:12px;background:#11131a;color:#e5e7eb">{update_txt}</textarea>
       </div>
       <div class="toolbar">
   <div class="toolbar-left">
-    <a class="btn solid" href="/clicker">🎮 {{ T('goto_clicker') }}</a>
+    <a class="btn solid" href="/clicker">🎮 {T('goto_clicker')}</a>
     <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
     <a class="btn" href="/disclaimer">ℹ️ Respect</a>
   </div>
 
   <div class="toolbar-right">
-    <a class="btn" href="/lang?to=en">{{ T('change_en') }}</a>
-    <a class="btn" href="/lang?to=fr">{{ T('change_fr') }}</a>
+    <a class="btn" href="/lang?to=en">{T('change_en')}</a>
+    <a class="btn" href="/lang?to=fr">{T('change_fr')}</a>
     {"<span style='margin-left:8px'></span>"+admin_link if admin_link else ""}
   </div>
 </div>
@@ -593,6 +591,390 @@ PRESTIGE_UPGRADES = [
     {"key": "lucky_clicks", "name": "Crit click +5%/lvl (x3)",  "base": 1_000_000_000_000_000, "max": 15}, # 1Qa
 ]
 
+# ---------- Achievements (server authority) ----------
+# +5% a/s for each unlocked (multiplicative: 1.05 ** n)
+# +1000 a/s flat bonus if ALL are unlocked
+
+# Milestones
+CPS_TARGETS   = [1,2,5,10,20,50,100,200,500,1_000,2_000,5_000,10_000,20_000,50_000,100_000,200_000,500_000,1_000_000,2_000_000]
+COUNT_TARGETS = [1_000,10_000,100_000,1_000_000,10_000_000,100_000_000,1_000_000_000,10_000_000_000,100_000_000_000,
+                 1_000_000_000_000,10_000_000_000_000,100_000_000_000_000,1_000_000_000_000_000,10_000_000_000_000_000,
+                 100_000_000_000_000_000,1_000_000_000_000_000_000,10_000_000_000_000_000_000,100_000_000_000_000_000_000,
+                 1_000_000_000_000_000_000_000,10_000_000_000_000_000_000_000]
+ASC_TARGETS   = [1,5,10,25,50]
+BUY_THRESHOLDS = [10,25,50,100]  # per core unit
+
+# Core unit keys (match client shop)
+CORE_UNITS = {
+  "rock":"Petit caillou Autiste","wood":"Autiste en bois","pen":"Stylo Autiste",
+  "remi":"Remi - Autiste","jonsman":"Jonsman - Autiste","hector":"Hector - Autiste","valentin":"Valentin - Autiste",
+  "johan":"Johan - Autiste","viki":"Viki - Autiste","paul":"Paul - Autiste","samere":"Sa Mère - Autiste",
+  "shoes":"Chaussures Autistes","factory":"Usine Autiste","farm":"Ferme Autiste","tower":"Tour Autiste",
+  "lab":"Laboratoire Autiste","server":"Serveur Autiste","mine":"Mine Autiste","bunker":"Bunker Autiste",
+  "fusion":"Autiste Fusion Reactor","qportal":"Quantum Portail Autiste","aiswarm":"AI Swarm Autiste","planet":"Planet Factory Autiste",
+  "bhc":"Black Hole Autiste Collider","multi":"Multiverse Franchise Autiste","timemachine":"Time Machine Autiste",
+  "galactic":"Galactic Autiste Conglomerate","dimemp":"Dimensional Autiste Empire",
+  "sock":"Chaussettes Autistes","iphone":"Autiste iPhone 34","tesla":"Autiste Tesla Cybertruck","pcgamer":"Autiste PC Gamer",
+  "mcdo":"Autiste McDo Factory","rocket":"Autiste SpaceX Rocket","crypto":"Autiste Crypto Mine","nuclear":"Autiste Nuclear Plant",
+  "mars":"Autiste Mars Colony","black":"Autiste Black Market",
+  "dyson":"Autiste Dyson Sphere","empiregal":"Empire Autiste Galactique","universe":"Autiste Univers Portable",
+  "simul":"Simulation Autiste Infinie","god":"Autiste Dieu Ancien","omniverse":"Autiste Omnivers","source":"Autiste Source du Tout",
+}
+CORE_KEYS = list(CORE_UNITS.keys())  # 45 units → 45 * 4 = 180 buy achievements
+
+# Build static definition list (≈225)
+def build_achievement_defs():
+    defs = []
+    for v in CPS_TARGETS:
+        defs.append({"id": f"cps_{v}", "group":"cps", "name": f"Hit {v} a/s", "desc": f"Reach ≥ {v} autists/s"})
+    for v in COUNT_TARGETS:
+        defs.append({"id": f"count_{v}", "group":"count", "name": f"Bank {v}", "desc": f"Total autists ≥ {v}"})
+    for v in ASC_TARGETS:
+        defs.append({"id": f"asc_{v}", "group":"asc", "name": f"Ascend ×{v}", "desc": f"Perform {v} ascensions"})
+    for key in CORE_KEYS:
+        nm = CORE_UNITS.get(key, key)
+        for n in BUY_THRESHOLDS:
+            defs.append({"id": f"buy_{key}_{n}", "group":"buy", "name": f"{nm} ×{n}", "desc": f"Own {n} of {nm}"})
+    return defs
+
+ACH_DEFS = build_achievement_defs()
+ACH_TOTAL = len(ACH_DEFS)  # expected 225
+ALL_ACH_BONUS = 1000  # +1000 a/s flat if all unlocked
+
+def _ach_mult(n):   # multiplicative 5% per achievement
+    try: n = int(n)
+    except: n = 0
+    return (1.05) ** max(0, n)
+
+def _scan_achievements(doc):
+    """
+    Evaluate achievements for a user doc (modifies doc['ach']).
+    Returns (new_count, total_defs, has_all).
+    """
+    prog = (doc or {}).get("progress") or {}
+    cps   = float(prog.get("cps") or 0.0)
+    total = float(prog.get("count") or 0.0)
+    shop  = prog.get("shop") or []
+    asc   = int(((doc or {}).get("prestige") or {}).get("asc") or 0)
+
+    have = set((doc or {}).get("ach") or [])
+
+    # cps
+    for v in CPS_TARGETS:
+        if cps >= v: have.add(f"cps_{v}")
+    # total
+    for v in COUNT_TARGETS:
+        if total >= v: have.add(f"count_{v}")
+    # ascends
+    for v in ASC_TARGETS:
+        if asc >= v: have.add(f"asc_{v}")
+    # per-unit buys (only core keys; custom units ignored)
+    qty = { (it.get("key") or ""): int(it.get("lvl") or 0) for it in shop }
+    for key in CORE_KEYS:
+        lv = int(qty.get(key, 0))
+        for n in BUY_THRESHOLDS:
+            if lv >= n: have.add(f"buy_{key}_{n}")
+
+    doc["ach"] = sorted(have)
+    has_all = len(doc["ach"]) >= ACH_TOTAL
+    return len(doc["ach"]), ACH_TOTAL, has_all
+
+@app.get("/api/achievements")
+def api_get_achievements():
+    if not is_authed():
+        return jsonify({"ok": False, "err": "not_auth"}), 401
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        user = (db.get("users") or {}).get(u) or {}
+        n, tot, all_ok = _scan_achievements(user)  # update in-memory
+        save_db(db)
+        return jsonify({
+            "ok": True,
+            "defs": ACH_DEFS,               # ~225 items
+            "unlocked": user.get("ach", []),
+            "count": n, "total": tot,
+            "mult": _ach_mult(n),
+            "all": all_ok, "all_bonus": ALL_ACH_BONUS
+        })
+
+# ---------- Profiles (explicit create) ----------
+def _profile_from_doc(username, doc):
+    # DO NOT auto-create here; just read doc safely
+    prog  = (doc or {}).get("progress") or _empty_progress()
+    prest = (doc or {}).get("prestige") or _empty_prestige()
+    has_profile = isinstance((doc or {}).get("profile"), dict)
+
+    # keep achievements up to date (doesn't need a profile)
+    _scan_achievements(doc)
+    ach_ids = doc.get("ach") or []
+    ach_map = {d["id"]: d for d in ACH_DEFS}
+    ach_list = [{
+        "id": aid,
+        "name": ach_map.get(aid, {"name": aid}).get("name"),
+        "group": ach_map.get(aid, {}).get("group", "")
+    } for aid in ach_ids[:200]]
+
+    return {
+        "exists": has_profile,
+        "user": username,
+        "bio": (doc.get("profile", {}) or {}).get("bio", "")[:280] if has_profile else "",
+        "count": float(prog.get("count") or 0.0),
+        "cps": float(prog.get("cps") or 0.0),
+        "tryz": int(prest.get("tryz") or 0),
+        "asc": int(prest.get("asc") or 0),
+        "ach_count": len(ach_ids),
+        "ach_total": ACH_TOTAL,
+        "ach_mult": _ach_mult(len(ach_ids)),
+        "ach": ach_list,
+    }
+
+@app.get("/api/profile")
+def api_profile():
+    # ?u=Name  → show that user's profile
+    # empty    → show current user (must be authed)
+    target = (request.args.get("u") or "").strip()
+    with lock:
+        db = load_db()
+        if not target:
+            target = session.get("user")
+        users = db.get("users", {}) or {}
+        if not target or target not in users:
+            return jsonify({"ok": False, "err": "not_found"}), 404
+        doc = users[target]
+        prof = _profile_from_doc(target, doc)
+        save_db(db)  # achievements might have been updated
+        return jsonify({"ok": True, "profile": prof, "self": (session.get("user") == target)})
+
+@app.post("/api/profile_create")
+def api_profile_create():
+    # Create profile for current authed user from their existing account
+    if not is_authed():
+        return jsonify({"ok": False, "err": "not_auth"}), 401
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        users = db.get("users", {}) or {}
+        if not u or u not in users:
+            return jsonify({"ok": False, "err": "user_missing"}), 400
+        doc = users[u]
+        if not isinstance(doc.get("profile"), dict):
+            doc["profile"] = {"bio": ""}
+            save_db(db)
+            return jsonify({"ok": True, "created": True})
+        else:
+            return jsonify({"ok": True, "created": False})  # already exists
+
+@app.post("/api/profile_settings")
+def api_profile_settings():
+    # Update bio (requires an existing profile)
+    if not is_authed():
+        return jsonify({"ok": False, "err": "not_auth"}), 401
+    data = request.get_json(silent=True) or {}
+    bio = str(data.get("bio") or "").strip()[:280]
+    with lock:
+        db = load_db()
+        u = session.get("user")
+        users = db.get("users", {}) or {}
+        if not u or u not in users:
+            return jsonify({"ok": False, "err": "user_missing"}), 400
+        doc = users[u]
+        if not isinstance(doc.get("profile"), dict):
+            return jsonify({"ok": False, "err": "no_profile"}), 400
+        doc["profile"]["bio"] = bio
+        save_db(db)
+    return jsonify({"ok": True, "bio": bio})
+
+@app.get("/profile")
+def profile_page():
+    # Search + view + create-if-missing + settings (only when profile exists)
+    return """
+<!doctype html><meta charset="utf-8"><title>Profile</title>
+<style>
+  :root{ --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; --muted:#9aa0a6; }
+  *{box-sizing:border-box} body{font-family:Inter,Arial;background:
+    radial-gradient(900px 400px at 0% -10%, rgba(124,58,237,.25), transparent 60%),
+    radial-gradient(900px 500px at 120% 10%, rgba(239,68,68,.18), transparent 65%),
+    #000; color:var(--ink); margin:0; padding:24px}
+  .wrap{max-width:980px;margin:0 auto}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 0 40px rgba(124,58,237,.08)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input,button,textarea{border-radius:10px;border:1px solid var(--border);padding:10px;background:#15172b;color:#eee}
+  .btn{display:inline-block;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:#141625;color:#e5e7eb;text-decoration:none;cursor:pointer}
+  .btn.solid{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed}
+  .pill{padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#10101a;color:#cfcfe8}
+  .grid{display:grid;gap:10px}
+  .stats{display:grid;gap:10px;grid-template-columns:repeat(2,1fr)}
+  @media (min-width:900px){ .stats{grid-template-columns:repeat(4,1fr)} }
+  .stat{background:#0f1020;border:1px solid #2b2d4a;border-radius:14px;padding:12px;text-align:center}
+  .stat .v{font-size:20px;font-weight:700}
+  .ach{border:1px solid #2b2d4a;border-radius:12px;padding:10px;background:#121322;display:flex;justify-content:space-between;gap:8px}
+</style>
+
+<div class="wrap">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="row">
+        <a class="btn" href="/">← Home</a>
+        <a class="btn" href="/clicker">🎮 Clicker</a>
+        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+      </div>
+      <div class="row">
+        <input id="q" placeholder="Search username…" style="min-width:220px">
+        <button id="go" class="btn solid">Open Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile card (stats always visible, even if profile not created) -->
+  <div id="card_profile" class="card">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div>
+        <h1 id="p_user" style="margin:.2rem 0">—</h1>
+        <div id="p_bio" class="pill" style="margin-top:6px;max-width:700px">—</div>
+      </div>
+      <a class="btn" href="/profile">👤 My profile</a>
+    </div>
+
+    <div class="stats" style="margin-top:12px">
+      <div class="stat"><div class="k">Autists</div><div class="v" id="p_count">0</div></div>
+      <div class="stat"><div class="k">a/s</div><div class="v" id="p_cps">0</div></div>
+      <div class="stat"><div class="k">Tryzomiques</div><div class="v" id="p_tryz">0</div></div>
+      <div class="stat"><div class="k">Ascensions</div><div class="v" id="p_asc">0</div></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h3 style="margin:.2rem 0">Achievements</h3>
+        <div id="p_ach_sum" class="pill">—</div>
+      </div>
+      <div id="p_ach_list" class="grid" style="grid-template-columns:1fr;gap:8px;margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- Create profile CTA (only shows if self & not exists) -->
+  <div id="card_create" class="card" style="display:none">
+    <h2 style="margin:.2rem 0">Create your profile</h2>
+    <p class="pill">This will use your existing account. You can add a short bio after.</p>
+    <div class="row">
+      <button id="btn_create_profile" class="btn solid">Create Profile</button>
+      <span id="create_msg" class="pill">—</span>
+    </div>
+  </div>
+
+  <!-- Profile settings (only when profile exists & viewing self) -->
+  <div id="card_settings" class="card" style="display:none">
+    <h2 style="margin:.2rem 0">Profile Settings</h2>
+    <div class="grid" style="grid-template-columns:1fr auto;align-items:start">
+      <textarea id="bio" rows="3" placeholder="Short bio (public, 280 chars max)"></textarea>
+      <button id="save_bio" class="btn solid">Save</button>
+    </div>
+    <div id="save_msg" class="pill" style="margin-top:8px">Write something and click Save.</div>
+  </div>
+</div>
+
+<script>
+function fmt(n){
+  n = Number(n)||0;
+  const s = [[1e33,'de'],[1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],[1e18,'qi'],[1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']];
+  for(const [d,u] of s){ if(Math.abs(n)>=d){ let v=(n/d).toFixed(2).replace(/\\.00$/,'').replace(/(\\.\\d*[1-9])0$/,'$1'); return v+u; } }
+  return String(Math.trunc(n));
+}
+function param(n){ return new URLSearchParams(location.search).get(n)||''; }
+
+function renderProfile(p, isSelf){
+  document.getElementById('p_user').textContent = p.user || '—';
+  document.getElementById('p_bio').textContent  = (p.exists && (p.bio||'').trim()) ? p.bio : (p.exists ? '—' : 'No profile yet.');
+
+  document.getElementById('p_count').textContent= fmt(p.count||0);
+  document.getElementById('p_cps').textContent  = fmt(p.cps||0);
+  document.getElementById('p_tryz').textContent = fmt(p.tryz||0);
+  document.getElementById('p_asc').textContent  = fmt(p.asc||0);
+
+  const mult = Number(p.ach_mult||1);
+  const sum  = `Unlocked ${p.ach_count||0}/${p.ach_total||0} — Mult x${mult.toFixed(2)}`;
+  document.getElementById('p_ach_sum').textContent = sum;
+
+  const wrap = document.getElementById('p_ach_list');
+  wrap.innerHTML = '';
+  (p.ach||[]).slice(0,12).forEach(a=>{
+    const el = document.createElement('div');
+    el.className = 'ach';
+    el.innerHTML = `
+      <div>
+        <div style="font-weight:700">${(a.name||a.id)}</div>
+        <div style="opacity:.75">${(a.group||'').toUpperCase()}</div>
+      </div>
+      <div class="pill">✓ +5%</div>
+    `;
+    wrap.appendChild(el);
+  });
+
+  const showCreate = isSelf && !p.exists;
+  document.getElementById('card_create').style.display   = showCreate ? 'block' : 'none';
+  document.getElementById('card_settings').style.display = (isSelf && p.exists) ? 'block' : 'none';
+  if(isSelf && p.exists){
+    document.getElementById('bio').value = p.bio || '';
+  }
+}
+
+async function loadProfile(name){
+  let url = '/api/profile' + (name ? ('?u=' + encodeURIComponent(name)) : '');
+  try{
+    const r = await fetch(url, {cache:'no-store'});
+    const j = await r.json();
+    if(j && j.ok){
+      renderProfile(j.profile, j.self);
+    }else{
+      document.getElementById('p_user').textContent = 'Not found';
+      document.getElementById('p_bio').textContent = '—';
+    }
+  }catch(e){}
+}
+
+function goSearch(){
+  const q = (document.getElementById('q').value||'').trim();
+  if(!q) return;
+  location.href = '/profile?u=' + encodeURIComponent(q);
+}
+
+document.getElementById('go').onclick = goSearch;
+document.getElementById('q').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ goSearch(); } });
+
+document.getElementById('btn_create_profile').onclick = async ()=>{
+  try{
+    const r = await fetch('/api/profile_create', {method:'POST'});
+    const j = await r.json().catch(()=>({}));
+    document.getElementById('create_msg').textContent = (j && j.ok) ? (j.created ? 'Created ✓' : 'Already exists') : (j.err || 'Error');
+    if(j && j.ok){ loadProfile(''); }
+  }catch(e){
+    document.getElementById('create_msg').textContent = 'Network error';
+  }
+};
+
+document.getElementById('save_bio').onclick = async ()=>{
+  const bio = (document.getElementById('bio').value||'').trim();
+  try{
+    const r = await fetch('/api/profile_settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({bio})
+    });
+    const j = await r.json().catch(()=>({}));
+    document.getElementById('save_msg').textContent = (j && j.ok) ? 'Saved ✓' : (j.err || 'Error');
+    if(j && j.ok){ loadProfile(''); }
+  }catch(e){
+    document.getElementById('save_msg').textContent = 'Network error';
+  }
+};
+
+// boot
+const target = param('u');
+if(target){ document.getElementById('q').value = target; }
+loadProfile(target);
+</script>
+"""
+
+
 
 def _prestige_cost(key, lvl_next):
     # lvl_next starts at 1 for first buy
@@ -600,7 +982,6 @@ def _prestige_cost(key, lvl_next):
         if u["key"] == key:
             return int(u["base"] * lvl_next)  # simple linear scale
     return 999999999
-
 
 @app.post("/api/save_progress")
 def api_save_progress():
@@ -636,9 +1017,15 @@ def api_save_progress():
             "shop": shop,
             "saved_at": int(time.time()),
         }
+
+        # Update achievements based on the newly saved state
+        doc = db["users"][u]
+        _scan_achievements(doc)
+
         save_db(db)
 
     return jsonify({"ok": True})
+
 
 
 
@@ -667,7 +1054,10 @@ def api_load_progress():
             "shop": _sanitize_shop(prog.get("shop") or []),
             "saved_at": prog.get("saved_at"),
         }
-
+        # Backfill achievements for older accounts on load
+        user_doc = db["users"].get(u, {})
+        changed_count, _, _ = _scan_achievements(user_doc)
+        save_db(db)
     return jsonify({"ok": True, "progress": prog})
 
 
@@ -1181,7 +1571,7 @@ def api_me():
 
 
 # ---------- Clicker ----------
-@app.get("/clicker")
+@app.get("/clicker")  
 def clicker():
     return """
 <!doctype html><meta charset="utf-8"><title>Autists Clicker</title>
@@ -1196,6 +1586,14 @@ def clicker():
      #000;color:#eee;margin:0;padding:18px}
   .wrap{max-width:1000px;margin:0 auto;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);padding:16px;border-radius:22px;box-shadow:0 0 60px rgba(124,58,237,.08)}
   .row{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+    /* toolbar layout (desktop + mobile) */
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .toolbar-left,.toolbar-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  @media (max-width:700px){
+    .toolbar{flex-direction:column;align-items:stretch}
+    .toolbar-right{justify-content:flex-start}
+  }
+
   .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--btn);color:var(--btnTxt);text-decoration:none;cursor:pointer;transition:transform .05s ease}
   .btn:active{transform:scale(.98)}
   .btn.orange{background:linear-gradient(90deg,#7c3aed,#ef4444);border-color:#7c3aed}
@@ -1211,12 +1609,21 @@ def clicker():
   .stat{background:#0f1020;border:1px solid #2b2d4a;border-radius:14px;padding:10px;text-align:center}
   .stat .v{font-size:20px;font-weight:700}
   .shimmer{background:linear-gradient(90deg,rgba(124,58,237,.15),rgba(239,68,68,.15));filter:blur(30px);position:absolute;inset:-30px;z-index:-1}
-</style>
+/* Achievements modal */
+#ach_backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:999}
+#ach_modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(920px,90vw);max-height:80vh;overflow:auto;
+  background:#0f1020;border:1px solid #2b2d4a;border-radius:16px;padding:16px;display:none;z-index:1000}
+#ach_list{display:grid;grid-template-columns:1fr;gap:8px}
+@media (min-width:800px){ #ach_list{grid-template-columns:1fr 1fr} }
+.ach{border:1px solid #2b2d4a;border-radius:12px;padding:10px;background:#121322;display:flex;justify-content:space-between;gap:8px}
+.ach.ok{border-color:#2f9657;background:#142016}
+  </style>
 <div id="topbar" class="toolbar">
   <div class="toolbar-left" style="gap:8px">
     <button class="btn" onclick="setLang('fr')">Français</button>
     <button class="btn" onclick="setLang('en')">English</button>
     <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+    <a class="btn" href="/profile">👤 Profile</a>
     <img id="logo" alt="logo">
   </div>
   <div class="toolbar-right">
@@ -1259,6 +1666,11 @@ def clicker():
     <button id="btn_sync_shop" class="btn blue">Sync Shop</button>
     <span id="sync_msg" class="pill">…</span>
   </div>
+  <div class="row" style="justify-content:center;margin:8px 0">
+  <button id="btn_ach" class="btn blue">🏅 Achievements</button>
+  <span id="ach_summary" class="pill">—</span>
+</div>
+
 
     <div id="prestige" style="margin:12px 0;padding:12px;border:1px solid #2b2d4a;border-radius:14px;background:#0f1020">
     <div class="row" style="justify-content:space-between;gap:8px;align-items:center">
@@ -1298,6 +1710,16 @@ def clicker():
     <div id="rev_list" style="display:grid;gap:10px;margin-top:12px"></div>
   </div>
 
+  <div id="ach_backdrop"></div>
+<div id="ach_modal">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+    <h2 style="margin:0">Achievements</h2>
+    <button id="ach_close" class="btn">Close</button>
+  </div>
+  <div id="ach_head" class="pill" style="margin-bottom:8px">Loading…</div>
+  <div id="ach_list"></div>
+</div>
+
   
   <div id="custom" style="margin-top:16px;border:1px dashed #34345a;padding:12px;border-radius:12px;background:#11121f">
     <h3 id="lbl_create" style="text-align:center">Create custom Autist (cost: 1000)</h3>
@@ -1309,6 +1731,24 @@ def clicker():
     <p id="c_msg" style="color:#bcbce8;margin-top:6px"></p>
   </div>
 </div>
+
+<!-- Console (bottom of page) -->
+<div id="console" class="card" style="margin-top:16px;border:1px solid #2b2d4a;border-radius:14px;background:#0f1020;padding:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <h3 style="margin:6px 0">Console</h3>
+    <span class="pill">type: <b>help</b></span>
+  </div>
+
+  <div id="con_out" style="height:180px;overflow:auto;background:#0e1022;border:1px solid #2b2d4a;border-radius:10px;padding:8px;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;white-space:pre-wrap"></div>
+
+  <form id="con_form" style="display:flex;gap:8px;margin-top:8px" onsubmit="return false">
+    <input id="con_in" placeholder="help" autocomplete="off" style="flex:1;padding:10px;border-radius:10px;border:1px solid #2b2d4a;background:#15172b;color:#eee">
+    <button id="con_run" class="btn orange" type="button">Run</button>
+    <button id="con_clear" class="btn" type="button">Clear</button>
+  </form>
+</div>
+
+
 
 <script>
 // ===== i18n (client EN/FR) =====
@@ -1329,6 +1769,74 @@ function applyLang(){
 }
 
 function starRow(n){ return "★".repeat(n) + "☆".repeat(5-n); }
+
+async function refreshAchievements(){
+  try{
+    const r = await fetch("/api/achievements",{cache:"no-store"});
+    if(r.status===401) return; // not logged
+    const j = await r.json();
+    if(!j.ok) return;
+
+    ACH.unlocked = new Set(j.unlocked||[]);
+    ACH.count    = Number(j.count||0);
+    ACH.total    = Number(j.total||0);
+    ACH.mult     = Number(j.mult||1);
+    ACH.all      = !!j.all;
+    ACH.allBonus = Number(j.all_bonus||1000);
+
+    // small summary
+    const pct = ((ACH.count/Math.max(1,ACH.total))*100).toFixed(1);
+    document.getElementById("ach_summary").textContent =
+      `Unlocked: ${ACH.count}/${ACH.total} — +${((ACH.mult-1)*100).toFixed(1)}% a/s` +
+      (ACH.all?` — All unlocked! +${ACH.allBonus}/s`:``);
+
+    // reapply math
+    recalc(); update();
+  }catch(e){}
+}
+
+function openAch(){
+  document.getElementById("ach_backdrop").style.display="block";
+  document.getElementById("ach_modal").style.display="block";
+  renderAchievementsModal();
+}
+function closeAch(){
+  document.getElementById("ach_backdrop").style.display="none";
+  document.getElementById("ach_modal").style.display="none";
+}
+
+function renderAchievementsModal(){
+  const head = document.getElementById("ach_head");
+  head.textContent = `Unlocked ${ACH.count}/${ACH.total} — Multiplier x${(ACH.mult||1).toFixed(2)}${ACH.all?` — +${ACH.allBonus}/s bonus`:``}`;
+
+  const wrap = document.getElementById("ach_list");
+  wrap.innerHTML = "";
+  // Request defs on demand (they're also in the API we called)
+  // But we cached them in the previous call:
+  fetch("/api/achievements",{cache:"no-store"})
+    .then(r=>r.json())
+    .then(j=>{
+      if(!j || !j.ok) return;
+      const defs = j.defs||[];
+      const have = new Set(j.unlocked||[]);
+      defs.forEach(d=>{
+        const ok = have.has(d.id);
+        const row = document.createElement("div");
+        row.className = "ach" + (ok ? " ok" : "");
+        row.innerHTML = `
+          <div>
+            <div style="font-weight:700">${d.name}</div>
+            <div style="opacity:.8">${d.desc}</div>
+            <div style="opacity:.6;font-size:.9rem">${d.group.toUpperCase()}</div>
+          </div>
+          <div class="pill">${ok? "✓ +5%" : "Locked"}</div>
+        `;
+        wrap.appendChild(row);
+      });
+    })
+    .catch(()=>{});
+}
+
 
 async function loadUpdateBox(){
   try{
@@ -1498,7 +2006,7 @@ const megaUnits = [
   mk("Autiste Dyson Sphere", "dyson", 1e15, 5e11),
   mk("Empire Autiste Galactique", "empiregal", 1e16, 1e14),
   mk("Autiste Univers Portable", "universe", 1e18, 2e16),
-  mk("Simulation Autiste Infinie", "simul", 1e20, 1e15),
+  mk("Simulation Autiste Infinie", "simul", 1e20, 100e16),
   mk("Autiste Dieu Ancien", "god", 1e24, 1e19),
   mk("Autiste Omnivers", "omniverse", 1e28, 1e22),
   mk("Autiste Source du Tout", "source", 1e33, 1e26),
@@ -1536,6 +2044,11 @@ let count = 0, cps = 0;
 // Prestige (server-authoritative)
 let prestige = { tryz: 0, asc: 0, up: {} };
 let prestigeDefs = []; // from server
+
+// Achievements (client cache)
+let ACH = { unlocked:new Set(), mult:1.0, total:0, count:0, all:false, allBonus:1000 };
+function achievementsMult(){ return ACH.mult || 1.0; }
+
 
 function prestigeGet(key){ return Number((prestige.up||{})[key]||0); }
 function prestigeMultCps(){
@@ -1644,7 +2157,10 @@ function costOf(i){
 function effectiveInc(it){ return it.inc; }
 function recalc(){
   const base = shop.reduce((s,x)=> s + effectiveInc(x)*(Number(x.lvl)||0), 0);
-  cps = Math.max(0, base * prestigeMultCps() + flatCps());
+  let next = Math.max(0, base * prestigeMultCps() + flatCps());
+  next = next * achievementsMult();
+  if (ACH.all) next += (ACH.allBonus||0);     // +1000 a/s if ALL achievements
+  cps = next;
 }
 function rndInc(base){
   if(!base || base<=0) return 1;
@@ -1789,6 +2305,7 @@ async function saveServer(){
     }
     const j = await r.json().catch(()=>({}));
     document.getElementById("sync_msg").textContent = j.ok ? "✓" : "x";
+    if (j && j.ok){ refreshAchievements(); }
   }catch(e){
     document.getElementById("sync_msg").textContent = "network x";
   }
@@ -1926,6 +2443,9 @@ document.getElementById("btn_ascend").onclick = async ()=>{
   }catch(e){ alert("Ascend error"); }
 };
 document.getElementById("btn_save").onclick=saveServer;
+document.getElementById("btn_ach").onclick = openAch;
+document.getElementById("ach_close").onclick = closeAch;
+document.getElementById("ach_backdrop").onclick = closeAch;
 document.getElementById("btn_load").onclick=loadServer;
 document.getElementById("btn_reset").onclick=()=>{ localStorage.removeItem("autistes_clicker"); count=0; shop=JSON.parse(JSON.stringify(DEFAULT_SHOP)); recalc(); update(); };
 
@@ -1984,6 +2504,7 @@ setLang("fr");
 applyLang();
 applySettings();
 loadLocal();
+refreshAchievements();
 recalc();
 render();
 loadUpdateBox();
@@ -2005,6 +2526,203 @@ setInterval(()=>{
 },1000);
 </script>
 """
+
+<script>
+// ===== Mini Console =====
+(function(){
+  const out = document.getElementById('con_out');
+  const form = document.getElementById('con_form');
+  const input = document.getElementById('con_in');
+  const btnRun = document.getElementById('con_run');
+  const btnClear = document.getElementById('con_clear');
+
+  if(!out || !input){ return; } // if the block wasn't inserted, bail
+
+  const H = { list: [], idx: -1 };
+
+  function conPrint(msg){
+    const line = document.createElement('div');
+    line.textContent = String(msg);
+    out.appendChild(line);
+    out.scrollTop = out.scrollHeight;
+  }
+  function conPrintKV(k, v){
+    const line = document.createElement('div');
+    line.innerHTML = `<span style="opacity:.8">${k}:</span> <b>${v}</b>`;
+    out.appendChild(line);
+    out.scrollTop = out.scrollHeight;
+  }
+  function splitArgs(s){
+    // supports quoted segments: buy "Planet Factory Autiste" 3
+    const m = s.match(/"([^"]*)"|'([^']*)'|\S+/g) || [];
+    return m.map(x => x.replace(/^['"]|['"]$/g,''));
+  }
+  function findUnit(keyOrName){
+    if(!keyOrName) return null;
+    const q = keyOrName.toLowerCase();
+    // try by key
+    let it = shop.find(u => (u.key||'').toLowerCase() === q);
+    if(it) return it;
+    // fallback: name contains
+    it = shop.find(u => (u.name||'').toLowerCase().includes(q));
+    return it || null;
+  }
+
+  async function runCmd(line){
+    if(!line.trim()) return;
+    conPrint(`> ${line}`);
+    H.list.push(line);
+    H.idx = H.list.length;
+
+    const [cmd, ...args] = splitArgs(line.trim());
+    const c = (cmd||'').toLowerCase();
+
+    if(!commands[c]){
+      conPrint("Unknown command. Type 'help'.");
+      return;
+    }
+    try{
+      await commands[c](args);
+    }catch(e){
+      conPrint('Error: ' + (e?.message || e));
+    }
+  }
+
+  const commands = {
+    help(){
+      conPrint("Available commands:");
+      conPrint("  help                          — show this help");
+      conPrint("  stats                         — show key stats");
+      conPrint("  list [n]                      — list first n shop items (default 10)");
+      conPrint("  info <key|name>               — show details for a unit");
+      conPrint("  buy <key|name> [n]            — buy n levels (default 1)");
+      conPrint("  sell <key|name> [n]           — sell n levels (default 1)");
+      conPrint("  add <n>                       — add n autists locally");
+      conPrint("  setlang <fr|en>               — switch UI language");
+      conPrint("  save | load                   — sync with your account");
+      conPrint("  syncshop                      — refresh shop defs (names/costs)");
+      conPrint("  prestige                      — show prestige & ascend estimate");
+      conPrint("  ascend                        — click the Ascend button");
+      conPrint("  clear                         — clear console output");
+    },
+
+    stats(){
+      conPrintKV('Count', formatNum(count));
+      conPrintKV('a/s', formatNum(cps));
+      conPrintKV('Clicks/s (local)', (cpsClick||0).toFixed(2));
+      conPrintKV('Prestige — tryz', formatNum((prestige.tryz||0)));
+      conPrintKV('Prestige — asc', String(prestige.asc||0));
+    },
+
+    list(args){
+      const n = Math.max(1, Math.min(100, parseInt(args[0]||'10',10)));
+      shop.slice(0,n).forEach(it=>{
+        conPrint(`${it.key.padEnd(14,' ')}  ${it.name} — lvl ${it.lvl} — cost ${formatNum(costOf(it))} — +${formatNum(effectiveInc(it))}/s/lvl`);
+      });
+    },
+
+    info(args){
+      const it = findUnit(args.join(' '));
+      if(!it){ conPrint('Unit not found'); return; }
+      conPrintKV('Key', it.key);
+      conPrintKV('Name', it.name);
+      conPrintKV('Level', formatNum(it.lvl));
+      conPrintKV('Base cost', formatNum(it.base));
+      conPrintKV('Income/level', formatNum(effectiveInc(it)));
+      conPrintKV('Buy cost now', formatNum(costOf(it)));
+    },
+
+    buy(args){
+      const it = findUnit(args[0]);
+      if(!it){ conPrint('Unit not found'); return; }
+      let n = Math.max(1, parseInt(args[1]||'1',10));
+      let bought = 0;
+      while(n-- > 0){
+        const price = costOf(it);
+        if(count >= price){
+          count -= price;
+          it.lvl++;
+          bought++;
+        }else break;
+      }
+      recalc(); update(); saveLocal(); updateClickButton();
+      conPrint(`Bought ${bought} × ${it.name}.`);
+    },
+
+    sell(args){
+      const it = findUnit(args[0]);
+      if(!it){ conPrint('Unit not found'); return; }
+      let n = Math.max(1, parseInt(args[1]||'1',10));
+      let sold = 0;
+      while(n-- > 0 && it.lvl > 0){
+        const price = costOf(it);
+        const refund = Math.floor(price * refundRate());
+        it.lvl -= 1;
+        count  += refund;
+        sold++;
+      }
+      recalc(); render(); saveLocal(); updateClickButton();
+      conPrint(`Sold ${sold} × ${it.name}.`);
+    },
+
+    add(args){
+      const n = Number(args[0]||0);
+      if(!isFinite(n)){ conPrint('Usage: add <number>'); return; }
+      count += n;
+      recalc(); update(); saveLocal(); updateClickButton();
+      conPrint(`Added ${formatNum(n)}.`);
+    },
+
+    setlang(args){
+      const l = (args[0]||'').toLowerCase();
+      if(l!=='fr' && l!=='en'){ conPrint("Usage: setlang fr|en"); return; }
+      setLang(l); update(); conPrint(`Language set to ${l}.`);
+    },
+
+    async save(){ await saveServer(); conPrint('Save requested.'); },
+    async load(){ await loadServer(); conPrint('Load requested.'); },
+
+    syncshop(){ syncShopWithDefaults(); conPrint('Shop synced with defaults.'); },
+
+    prestige(){
+      const est = Math.floor(((cps||0)/1_000_000) * (1 + 0.10 * (prestigeGet('asc_mult'))));
+      conPrintKV('Tryz now', formatNum(prestige.tryz||0));
+      conPrintKV('Ascends', String(prestige.asc||0));
+      conPrintKV('If ascend now', `+${formatNum(est)} tryz`);
+    },
+
+    ascend(){
+      const btn = document.getElementById('btn_ascend');
+      if(btn){ btn.click(); conPrint('Ascend dialog shown.'); }
+    },
+
+    clear(){ out.innerHTML=''; }
+  };
+
+  // Wire UI
+  function run(){
+    const line = input.value || '';
+    input.value = '';
+    runCmd(line);
+  }
+  btnRun?.addEventListener('click', run);
+  form?.addEventListener('submit', run);
+  btnClear?.addEventListener('click', ()=>commands.clear());
+
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'ArrowUp'){
+      if(H.idx > 0){ H.idx--; input.value = H.list[H.idx] || ''; e.preventDefault(); }
+    }else if(e.key === 'ArrowDown'){
+      if(H.idx < H.list.length){ H.idx++; input.value = H.list[H.idx] || ''; e.preventDefault(); }
+    }else if(e.key === 'Enter'){
+      // handled by form
+    }
+  });
+
+  conPrint('Console ready. Type "help".');
+})();
+</script>
+
 
 # ---------- Leaderboard (current count & a/s, refresh via client every 60s) ----------
 def _collect_leaderboards_simple():
