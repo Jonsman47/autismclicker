@@ -70,32 +70,32 @@ def save_db(db):
         json.dump(db, f, ensure_ascii=False, indent=2)
     os.replace(tmp, DB_PATH)  # atomic on POSIX
 
-    def _tick_bots(db, rate_per_hour=0.001):
-      """
-      +0.10%/h composés sur progress['count'] pour les comptes marqués bot.
-      Nécessite doc['bot']=True et doc['bot_tick']=timestamp.
-      """
-    now = time.time()
-    changed = False
-    for _, doc in (db.get("users") or {}).items():
-        if not doc.get("bot"):
-            continue
-        last = float(doc.get("bot_tick") or now)
-        dt_h = max(0.0, (now - last) / 3600.0)
-        if dt_h <= 0:
-            continue
+def _tick_bots(db, rate_per_hour=0.001):
+  """
+  +0.10%/h composés sur progress['count'] pour les comptes marqués bot.
+  Nécessite doc['bot']=True et doc['bot_tick']=timestamp.
+  """
+now = time.time()
+changed = False
+for _, doc in (db.get("users") or {}).items():
+    if not doc.get("bot"):
+        continue
+    last = float(doc.get("bot_tick") or now)
+    dt_h = max(0.0, (now - last) / 3600.0)
+    if dt_h <= 0:
+        continue
 
-        prog = doc.get("progress") or {}
-        cur = float(prog.get("count") or 0.0)
-        if cur > 0.0:
-            prog["count"] = cur * ((1.0 + rate_per_hour) ** dt_h)
-            doc["progress"] = prog
-            changed = True
+    prog = doc.get("progress") or {}
+    cur = float(prog.get("count") or 0.0)
+    if cur > 0.0:
+        prog["count"] = cur * ((1.0 + rate_per_hour) ** dt_h)
+        doc["progress"] = prog
+        changed = True
 
-        doc["bot_tick"] = now
+    doc["bot_tick"] = now
 
-    if changed:
-        save_db(db)
+if changed:
+    save_db(db)
 
 
 
@@ -1575,7 +1575,7 @@ def _rand_username():
 def _fake_progress():
     # Roughly log-normal-ish spread so a few are huge, most are small:
     cps = max(0.0, round(random.expovariate(1/2_000_000) * 1_000_000_000_000_000_000 , 2))  # avg ~2M cps
-    count = max(cps * random.uniform(50, 300), random.uniform(1e3, 1e24))
+    count = max(cps * random.uniform(50, 300), random.uniform(1e3, 1e48))
     return {
         "v": 5,
         "count": float(count),
@@ -2932,19 +2932,18 @@ def _collect_leaderboards_simple():
                 "cps":   float(prog.get("cps")   or 0.0),
             })
     top_count = sorted(rows, key=lambda r: r["count"], reverse=True)[:50]
-    top_cps   = sorted(rows, key=lambda r: r["cps"],   reverse=True)[:50]
+    top_cps   = sorted(rows, key=lambda r: r["cps"],   reverse=True)[:50]"""
     return top_count, top_cps
 
 @app.get("/api/leaderboard")
 def api_leaderboard():
     with lock:
         db = load_db()
-        _tick_bots(db)  # tick avant de lire les scores
+        _tick_bots(db)  # make sure _tick_bots is defined at module scope, not inside save_db()
         users = db.get("users", {}) or {}
         rows = []
         for name, doc in users.items():
             prog = (doc or {}).get("progress") or {}
-            # force numeric types so sorting works even if strings snuck into db.json
             try:
                 c = float(prog.get("count", 0) or 0)
             except:
@@ -2958,12 +2957,12 @@ def api_leaderboard():
         top_count = sorted(rows, key=lambda x: x["count"], reverse=True)[:50]
         top_cps   = sorted(rows, key=lambda x: x["cps"],   reverse=True)[:50]
 
-    return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})"""
+    return jsonify({"ok": True, "top_count": top_count, "top_cps": top_cps})
 
 
 @app.get("/leaderboard")
 def leaderboard_page():
-    page = r"""<!doctype html><meta charset="utf-8"><title>Leaderboard</title>
+    return r"""<!doctype html><meta charset="utf-8"><title>Leaderboard</title>
     <style>
       :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
       *{box-sizing:border-box} body{font-family:Inter,Arial;background:
@@ -2976,23 +2975,26 @@ def leaderboard_page():
       th,td{border-bottom:1px solid var(--border);padding:10px}
       th:last-child, td:last-child{text-align:right}
       a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none;background:#141625}
-      .grid{display:grid;gap:16px;grid-template-columns:1fr; }
+      .grid{display:grid;gap:16px;grid-template-columns:1fr;}
       @media (min-width:900px){ .grid{grid-template-columns:1fr 1fr} }
       .muted{color:#9aa0a6}
+      .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+      .toolbar-left,.toolbar-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     </style>
 
-      <div class="card">
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <h1 style="margin:0">Leaderboard</h1>
-      </div>
-      <div class="toolbar-right">
-        <span id="updated" class="muted">—</span>
-        <a class="btn" href="/">← Home</a>
-      </div>
-    </div>
-  </div>
+    <div class="wrap">
 
+      <div class="card">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <h1 style="margin:0">Leaderboard</h1>
+          </div>
+          <div class="toolbar-right">
+            <span id="updated" class="muted">—</span>
+            <a class="btn" href="/">← Home</a>
+          </div>
+        </div>
+      </div>
 
       <div class="grid">
         <div class="card">
@@ -3009,148 +3011,146 @@ def leaderboard_page():
     </div>
 
     <script>
-     function fmt(n){
-  n = Number(n)||0;
-  const scales = [
-    [1e75,'qavg'],[1e72,'tvg'],[1e69,'dvg'],[1e66,'uvg'],[1e63,'vg'],
-    [1e60,'nd'],[1e57,'od'],[1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
-    [1e45,'qad'],[1e42,'td'],[1e39,'dd'],[1e36,'ud'],[1e33,'de'],
-    [1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],[1e18,'qi'],
-    [1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']
-  ];
-  for (const [div,suf] of scales){
-    if (Math.abs(n) >= div){
-      const val = (n/div).toFixed(2).replace(/\.00$/,'').replace(/(\.\d*[1-9])0$/,'$1');
-      return val + suf;
-    }
-  }
-  if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
-  return String(Math.trunc(n));
-}
-
-
-function renderTable(tbody, rows, key){
-  tbody.innerHTML = '';
-  if(!rows || !rows.length){
-    tbody.innerHTML = '<tr><td colspan="3" class="muted">Empty</td></tr>';
-    return;
-  }
-
-  rows.forEach((r,i)=>{
-    const tr = document.createElement('tr');
-    let name = r.user;
-    let badge = '';
-
-    if (name && name.toLowerCase() === 'jonsman47') {
-      name = `<span style="color:#b24ef5;font-weight:700">${name}</span>`;
-      badge = ` <span style="font-size:0.75rem;background:#b24ef5;color:#fff;padding:2px 6px;border-radius:6px;margin-left:6px;">CREATOR</span>`;
+    function fmt(n){
+      n = Number(n)||0;
+      const scales = [
+        [1e75,'qavg'],[1e72,'tvg'],[1e69,'dvg'],[1e66,'uvg'],[1e63,'vg'],
+        [1e60,'nd'],[1e57,'od'],[1e54,'spd'],[1e51,'sxd'],[1e48,'qid'],
+        [1e45,'qad'],[1e42,'td'],[1e39,'dd'],[1e36,'ud'],[1e33,'de'],
+        [1e30,'no'],[1e27,'oc'],[1e24,'sp'],[1e21,'sx'],[1e18,'qi'],
+        [1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m'],[1e3,'k']
+      ];
+      for (const [div,suf] of scales){
+        if (Math.abs(n) >= div){
+          const val = (n/div).toFixed(2).replace(/\.00$/,'').replace(/(\.\d*[1-9])0$/,'$1');
+          return val + suf;
+        }
+      }
+      if (Math.abs(n) >= 1e6) return n.toExponential(2).replace("+","");
+      return String(Math.trunc(n));
     }
 
-    tr.innerHTML = `
-      <td>${i+1}</td>
-      <td>${name}${badge}</td>
-      <td>${fmt(r[key])}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-
-      async function loadLB(){
-        try{
-          const r = await fetch('/api/leaderboard',{cache:'no-store'});
-          const j = await r.json();
-          if(j && j.ok){
-            renderTable(document.querySelector('#tbl_count tbody'), j.top_count, 'count');
-            renderTable(document.querySelector('#tbl_cps tbody'),   j.top_cps,   'cps');
-            document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
-          }
-        }catch(e){ console.error(e); }
+    function renderTable(tbody, rows, key){
+      tbody.innerHTML = '';
+      if(!rows || !rows.length){
+        tbody.innerHTML = '<tr><td colspan="3" class="muted">Empty</td></tr>';
+        return;
       }
 
-      loadLB();
-      setInterval(loadLB, 60000);
+      rows.forEach((r,i)=>{
+        const tr = document.createElement('tr');
+        let name = r.user;
+        let badge = '';
+
+        if (name && name.toLowerCase() === 'jonsman47') {
+          name = `<span style="color:#b24ef5;font-weight:700">${name}</span>`;
+          badge = ` <span style="font-size:0.75rem;background:#b24ef5;color:#fff;padding:2px 6px;border-radius:6px;margin-left:6px;">CREATOR</span>`;
+        }
+
+        tr.innerHTML = `
+          <td>${i+1}</td>
+          <td>${name}${badge}</td>
+          <td>${fmt(r[key])}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadLB(){
+      try{
+        const r = await fetch('/api/leaderboard',{cache:'no-store'});
+        const j = await r.json();
+        if(j && j.ok){
+          renderTable(document.querySelector('#tbl_count tbody'), j.top_count, 'count');
+          renderTable(document.querySelector('#tbl_cps tbody'),   j.top_cps,   'cps');
+          document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        }
+      }catch(e){ console.error(e); }
+    }
+
+    loadLB();
+    setInterval(loadLB, 60000);
     </script>
     """
-    return page
 
-# ---------- catch-all ----------
-# ---------- Respect / Inclusion (FR + EN) ----------
-@app.get("/disclaimer")
-def disclaimer():
-    return """
-<!doctype html><meta charset="utf-8"><title>Respect & Inclusion</title>
-<style>
-  :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
-  *{box-sizing:border-box} body{font-family:Inter,Arial;background:
-    radial-gradient(900px 400px at 0% -10%, rgba(124,58,237,.25), transparent 60%),
-    radial-gradient(900px 500px at 120% 10%, rgba(239,68,68,.18), transparent 65%),
-    #000; color:var(--ink); margin:0; padding:24px}
-  .wrap{max-width:900px;margin:0 auto}
-  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 0 40px rgba(124,58,237,.08)}
-  a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none;background:#141625}
-  .muted{color:#9aa0a6}
-</style>
 
-<div class="card">
-  <div class="toolbar">
-    <div class="toolbar-left">
-      <h1 style="margin:0">Respect & Inclusion</h1>
-    </div>
-    <div class="toolbar-right">
-      <a class="btn" href="/">← Home</a>
-      <a class="btn" href="/clicker">🎮 Clicker</a>
-      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
-    </div>
-  </div>
-</div>
-
+  # ---------- catch-all ----------
+  # ---------- Respect / Inclusion (FR + EN) ----------
+  @app.get("/disclaimer")
+  def disclaimer():
+      return """
+  <!doctype html><meta charset="utf-8"><title>Respect & Inclusion</title>
+  <style>
+    :root { --bg:#000; --panel:#0b0b12; --panel2:#0f0f18; --border:#232334; --ink:#e7e7f5; }
+    *{box-sizing:border-box} body{font-family:Inter,Arial;background:
+      radial-gradient(900px 400px at 0% -10%, rgba(124,58,237,.25), transparent 60%),
+      radial-gradient(900px 500px at 120% 10%, rgba(239,68,68,.18), transparent 65%),
+      #000; color:var(--ink); margin:0; padding:24px}
+    .wrap{max-width:900px;margin:0 auto}
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 0 40px rgba(124,58,237,.08)}
+    a.btn{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:#ddd;text-decoration:none;background:#141625}
+    .muted{color:#9aa0a6}
+  </style>
 
   <div class="card">
-    <h2 style="margin:.2rem 0">FR — Note de respect</h2>
-    <p>
-      Ce jeu ne se moque d’aucun groupe de personnes. Il n’a pas pour but
-      d’insulter, de stigmatiser ou de dénigrer les personnes autistes ou
-      toute personne en situation de handicap. Le ton est parodique/arcade.
-      Si un contenu vous met mal à l’aise, dites-le nous et nous l’ajusterons.
-    </p>
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <h1 style="margin:0">Respect & Inclusion</h1>
+      </div>
+      <div class="toolbar-right">
+        <a class="btn" href="/">← Home</a>
+        <a class="btn" href="/clicker">🎮 Clicker</a>
+        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+      </div>
+    </div>
   </div>
 
-  <div class="card">
-    <h2 style="margin:.2rem 0">EN — Respect note</h2>
-    <p>
-      This game does not mock any group of people. It is not intended to insult,
-      stigmatize, or demean autistic people or anyone with disabilities.
-      The tone is parody/arcade. If something feels off, please tell us and
-      we’ll adjust.
-    </p>
+
+    <div class="card">
+      <h2 style="margin:.2rem 0">FR — Note de respect</h2>
+      <p>
+        Ce jeu ne se moque d’aucun groupe de personnes. Il n’a pas pour but
+        d’insulter, de stigmatiser ou de dénigrer les personnes autistes ou
+        toute personne en situation de handicap. Le ton est parodique/arcade.
+        Si un contenu vous met mal à l’aise, dites-le nous et nous l’ajusterons.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:.2rem 0">EN — Respect note</h2>
+      <p>
+        This game does not mock any group of people. It is not intended to insult,
+        stigmatize, or demean autistic people or anyone with disabilities.
+        The tone is parody/arcade. If something feels off, please tell us and
+        we’ll adjust.
+      </p>
+    </div>
+
+    <div class="card muted">
+      Merci / Thank you for playing ♥
+    </div>
   </div>
-
-  <div class="card muted">
-    Merci / Thank you for playing ♥
-  </div>
-</div>
-"""
+  """
 
 
-@app.get("/<path:_>")
-def any_route(_):
-    return redirect("/")
+  @app.get("/<path:_>")
+  def any_route(_):
+      return redirect("/")
 
-if __name__ == "__main__":
-    with lock:
-        db = load_db()
-        users = db.setdefault("users", {})
-        if not users:  # premier démarrage -> seed pour voir quelque chose sur le LB
-            for _ in range(15):
-                name = _rand_username()
-                users[name] = {
-                    "pw": generate_password_hash(secrets.token_hex(8)),
-                    "progress": _fake_progress(),
-                    "prestige": _empty_prestige(),
-                    "bot": True,
-                    "bot_tick": int(time.time()),
-                }
-        save_db(db)
-    # démarre le serveur si tu lances `python app.py`
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+  if __name__ == "__main__":
+      with lock:
+          db = load_db()
+          users = db.setdefault("users", {})
+          if not users:  # premier démarrage -> seed pour voir quelque chose sur le LB
+              for _ in range(15):
+                  name = _rand_username()
+                  users[name] = {
+                      "pw": generate_password_hash(secrets.token_hex(8)),
+                      "progress": _fake_progress(),
+                      "prestige": _empty_prestige(),
+                      "bot": True,
+                      "bot_tick": int(time.time()),
+                  }
+          save_db(db)
+      # démarre le serveur si tu lances `python app.py`
+      app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
