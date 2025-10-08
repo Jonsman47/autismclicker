@@ -1606,8 +1606,8 @@ def _rand_username():
 
 def _fake_progress():
     # Roughly log-normal-ish spread so a few are huge, most are small:
-    cps = max(0.0, round(random.expovariate(1/2_000_000) * 1_000_000_000_000_000_000 , 2))  # avg ~2M cps
-    count = max(cps * random.uniform(50, 300), random.uniform(1e3, 1e48))
+    cps = max(0.0, round(random.expovariate(1/2_000_000) * 1_000_000_000_000_000_000_000_000_000 , 2))  # avg ~2M cps
+    count = max(cps * random.uniform(50, 300), random.uniform(1e3, 1e56))
     return {
         "v": 5,
         "count": float(count),
