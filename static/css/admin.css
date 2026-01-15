@@ -1,0 +1,19 @@
+:root { --panel:#0b0b12; --border:#232334; --ink:#e7e7f5; --violet:#7c3aed; --red:#ef4444 }
+*{box-sizing:border-box}
+body{font-family:Inter,Arial;background:#000;color:var(--ink);margin:0;padding:24px}
+.container{max-width:1100px;margin:0 auto}
+.card{background:linear-gradient(180deg,#0b0b12,#0f0f18);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:18px}
+table{width:100%;border-collapse:collapse}
+th,td{border-bottom:1px solid var(--border);padding:10px;text-align:left}
+input,button,textarea{border-radius:10px;border:1px solid var(--border);padding:8px;background:#11131a;color:#e5e7eb}
+.btn{background:#141625;border-color:#2a2a3a;cursor:pointer;color:#e5e7eb;padding:8px 12px;border-radius:10px;text-decoration:none;display:inline-block}
+.btn.ok{background:linear-gradient(90deg,#7c3aed,#a78bfa)}
+.btn.warn{background:#ef4444;border-color:#ef4444}
+.btn.danger{background:#7c1d1d;border-color:#ef4444}
+.grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pill{padding:6px 10px;border:1px solid #2a2a2a;border-radius:999px;background:#10101a}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.toolbar-left,.toolbar-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.report{border:1px solid #2b2d4a;border-radius:10px;padding:10px;background:#11131a}

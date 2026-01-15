@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Profile</title>
+  <link rel="stylesheet" href="/static/css/profile.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="card toolbar">
+      <div class="toolbar-left">
+        <a class="btn" href="/">← Home</a>
+        <a class="btn" href="/clicker">🎮 Clicker</a>
+        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+      </div>
+      <div class="toolbar-right">
+        <input id="q" placeholder="Search username…">
+        <button id="go" class="btn primary">Open Profile</button>
+      </div>
+    </div>
+
+    <div id="card_profile" class="card">
+      <div class="row space">
+        <div>
+          <h1 id="p_user">—</h1>
+          <div id="p_bio" class="pill">—</div>
+        </div>
+        <a class="btn" href="/profile">👤 My profile</a>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Autists</div><div class="v" id="p_count">0</div></div>
+        <div class="stat"><div class="k">a/s</div><div class="v" id="p_cps">0</div></div>
+        <div class="stat"><div class="k">Tryzomiques</div><div class="v" id="p_tryz">0</div></div>
+        <div class="stat"><div class="k">Ascensions</div><div class="v" id="p_asc">0</div></div>
+      </div>
+
+      <div class="card">
+        <div class="row space">
+          <h3>Achievements</h3>
+          <div id="p_ach_sum" class="pill">—</div>
+        </div>
+        <div id="p_ach_list" class="grid"></div>
+      </div>
+
+      <div class="card">
+        <h3>Top Units</h3>
+        <div id="p_units" class="grid"></div>
+      </div>
+    </div>
+
+    <div id="card_create" class="card" style="display:none">
+      <h2>Create your profile</h2>
+      <p class="pill">This will use your existing account. You can add a short bio after.</p>
+      <div class="row">
+        <button id="btn_create_profile" class="btn primary">Create Profile</button>
+        <span id="create_msg" class="pill">—</span>
+      </div>
+    </div>
+
+    <div id="card_settings" class="card" style="display:none">
+      <h2>Profile Settings</h2>
+      <div class="grid settings">
+        <textarea id="bio" rows="3" placeholder="Short bio (public, 280 chars max)"></textarea>
+        <button id="save_bio" class="btn primary">Save</button>
+      </div>
+      <div id="save_msg" class="pill">Write something and click Save.</div>
+    </div>
+  </div>
+
+  <script>
+    window.APP_CONFIG = { csrfToken: "{{ csrf_token }}" };
+  </script>
+  <script src="/static/js/profile.js"></script>
+</body>
+</html>
