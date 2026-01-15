@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Autists Clicker</title>
+  <link rel="stylesheet" href="/static/css/clicker.css">
+</head>
+<body data-theme="{{ theme_mode }}">
+  <div id="topbar" class="toolbar">
+    <div class="toolbar-left">
+      <a class="btn" href="/">← Home</a>
+      <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+      <a class="btn" href="/profile">👤 Profile</a>
+      <button id="theme_toggle" class="btn">Toggle Theme</button>
+      <img id="logo" alt="logo">
+    </div>
+    <div class="toolbar-right">
+      <a class="btn blue" href="/login">Login</a>
+      <a class="btn blue" href="/register">Register</a>
+      <a class="btn red" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1 id="title">Autists Clicker</h1>
+
+    <div class="stat" id="event_banner">No event active.</div>
+    <div class="stat" id="boost_banner">Boosts will appear here.</div>
+
+    <div class="stat" id="update_box">
+      <div class="stat-title">Latest Update</div>
+      <div id="update_text">Loading…</div>
+    </div>
+
+    <div class="stat" id="daily_box">
+      <div class="stat-title">Daily Reward</div>
+      <div class="row">
+        <div id="daily_status">Check in for rewards.</div>
+        <button id="btn_daily" class="btn orange">Claim</button>
+      </div>
+    </div>
+
+    <div class="stat" id="quest_box">
+      <div class="stat-title">Quests</div>
+      <div id="quest_list" class="quest-list"></div>
+    </div>
+
+    <div class="stat" id="rating_summary">⭐ 0.00 — 0 reviews</div>
+
+    <div class="statgrid">
+      <div class="stat"><div class="k" id="label_count">Autists</div><div class="v" id="count">0</div></div>
+      <div class="stat"><div class="k" id="label_cps">a/s</div><div class="v" id="cps">0</div></div>
+      <div class="stat"><div class="k">Clicks/s</div><div class="v" id="cps_click">0</div></div>
+    </div>
+
+    <div class="center">
+      <button id="click" class="btn orange">+1</button>
+    </div>
+
+    <div class="row center">
+      <button id="btn_save" class="btn green">Upload</button>
+      <button id="btn_load" class="btn blue">Load</button>
+      <button id="btn_sync_shop" class="btn blue">Sync Shop</button>
+      <span id="sync_msg" class="pill">…</span>
+    </div>
+
+    <div class="row center">
+      <button id="btn_ach" class="btn blue">🏅 Achievements</button>
+      <span id="ach_summary" class="pill">—</span>
+    </div>
+
+    <div id="prestige" class="card">
+      <div class="row space">
+        <div>
+          <b>Prestige — Tryzomiques:</b> <span id="tryz_bal">0</span>
+          <span class="pill">If Ascend now: +<span id="tryz_est">0</span></span>
+        </div>
+        <button id="btn_ascend" class="btn red">Ascend (reset, keep upgrades)</button>
+      </div>
+      <div class="section">
+        <h3>Prestige Upgrades</h3>
+        <div id="prestige_shop" class="grid"></div>
+      </div>
+      <div class="section">
+        <h3>Prestige Tree</h3>
+        <div id="prestige_tree" class="grid"></div>
+      </div>
+    </div>
+
+    <div id="automation" class="card">
+      <h3>Automation</h3>
+      <div class="row">
+        <label><input type="checkbox" id="auto_click"> Auto-click (uses energy)</label>
+        <label><input type="checkbox" id="auto_buy"> Auto-buy</label>
+        <span class="pill" id="energy_state">Energy: 0/0</span>
+      </div>
+      <div class="grid" id="auto_targets"></div>
+    </div>
+
+    <div class="shop-controls">
+      <input id="shop_search" placeholder="Search units…">
+      <select id="shop_filter"></select>
+      <select id="shop_sort">
+        <option value="cost">Sort by Cost</option>
+        <option value="roi">Sort by ROI</option>
+        <option value="owned">Sort by Owned</option>
+        <option value="prod">Sort by Production</option>
+      </select>
+      <div class="buy-modes">
+        <button data-buy="1" class="btn">x1</button>
+        <button data-buy="10" class="btn">x10</button>
+        <button data-buy="100" class="btn">x100</button>
+        <button data-buy="max" class="btn">MAX</button>
+      </div>
+    </div>
+
+    <h2 id="lbl_shop">Shop</h2>
+    <div id="shop" class="grid"></div>
+
+    <div id="reviews" class="card">
+      <h3>Reviews</h3>
+      <div class="review-form">
+        <select id="rev_stars">
+          <option value="5">5 ★</option>
+          <option value="4">4 ★</option>
+          <option value="3">3 ★</option>
+          <option value="2">2 ★</option>
+          <option value="1">1 ★</option>
+        </select>
+        <textarea id="rev_text" rows="3" placeholder="Write a short review (public)"></textarea>
+        <button id="rev_send" class="btn orange">Post</button>
+      </div>
+      <div id="rev_msg" class="pill">Be nice 🙂</div>
+      <div id="rev_list" class="grid"></div>
+    </div>
+
+    <div id="custom" class="card dashed">
+      <h3 id="lbl_create">Create custom unit (cost: 1000)</h3>
+      <div class="grid-two">
+        <input id="c_name" placeholder="Name">
+        <input id="c_cost" type="number" min="10" step="10" placeholder="Base cost">
+        <button id="c_make" class="btn">Create (1000)</button>
+      </div>
+      <p id="c_msg"></p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="ach_backdrop"></div>
+  <div id="ach_modal">
+    <div class="row space">
+      <h2>Achievements</h2>
+      <button id="ach_close" class="btn">Close</button>
+    </div>
+    <div id="ach_head" class="pill">Loading…</div>
+    <div id="ach_progress" class="grid"></div>
+    <div id="ach_list" class="grid"></div>
+    <div class="card">
+      <h3>Achievement Points</h3>
+      <label class="row"><input type="checkbox" id="ach_sound"> Sound on unlock</label>
+      <div id="ach_points"></div>
+      <div id="ach_shop" class="grid"></div>
+    </div>
+  </div>
+
+  <script>
+    window.APP_CONFIG = {
+      csrfToken: "{{ csrf_token }}",
+      themeMode: "{{ theme_mode }}",
+      isAdmin: {{ 'true' if is_admin else 'false' }}
+    };
+  </script>
+  <script src="/static/js/clicker.js"></script>
+</body>
+</html>

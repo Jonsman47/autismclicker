@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Autists Counter</title>
+  <link rel="stylesheet" href="/static/css/home.css">
+</head>
+<body>
+  <div class="container">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <a class="btn solid" href="/clicker">🎮 Go to Clicker</a>
+        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+        <a class="btn" href="/disclaimer">ℹ️ Respect</a>
+        <a class="btn" href="/profile">👤 Profile</a>
+      </div>
+      <div class="toolbar-right">
+        {% if is_admin %}
+        <a class="btn warn" href="/admin">Admin Panel</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="panel hero">
+      <h1>Autists Counter</h1>
+      <p class="muted">Current update:</p>
+      <div class="update">{{ update_text }}</div>
+      <div class="account">
+        {% if user %}
+        <span>Logged in as <strong>{{ user }}</strong></span>
+        <a class="btn" href="/logout">Logout</a>
+        {% else %}
+        <a class="btn" href="/register">Register</a>
+        <a class="btn" href="/login">Login</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

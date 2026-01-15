@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Leaderboard</title>
+  <link rel="stylesheet" href="/static/css/leaderboard.css">
+</head>
+<body data-theme="{{ theme_mode }}">
+  <div class="wrap">
+    <div class="card toolbar">
+      <div class="toolbar-left">
+        <h1>Leaderboard</h1>
+      </div>
+      <div class="toolbar-right">
+        <span id="updated" class="muted">—</span>
+        <a class="btn" href="/">← Home</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2 id="lbl_count">Most Autists (current)</h2>
+        <table id="tbl_count"><thead><tr><th>#</th><th>User</th><th>Autists</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h2 id="lbl_cps">Most Autists / sec (current)</h2>
+        <table id="tbl_cps"><thead><tr><th>#</th><th>User</th><th>a/s</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h2 id="lbl_season_count">Season — Most Autists</h2>
+        <table id="tbl_season_count"><thead><tr><th>#</th><th>User</th><th>Autists</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h2 id="lbl_season_cps">Season — Most a/s</h2>
+        <table id="tbl_season_cps"><thead><tr><th>#</th><th>User</th><th>a/s</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div class="card muted">Auto-updates every 60s.</div>
+  </div>
+
+  <script src="/static/js/leaderboard.js"></script>
+</body>
+</html>

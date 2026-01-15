@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+  <div class="container">
+    <div class="card toolbar">
+      <div class="toolbar-left">
+        <h1>Admin Panel</h1>
+      </div>
+      <div class="toolbar-right">
+        <a class="btn" href="/">← Home</a>
+        <a class="btn" href="/disclaimer">ℹ️ Respect</a>
+        <a class="btn" href="/leaderboard">🏆 Leaderboard</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Public Update Note</h2>
+      <form method="post" action="/admin/set_update" class="grid">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <textarea name="update" rows="6">{{ settings.update or '' }}</textarea>
+        <button class="btn ok" type="submit">Save</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Game Assets</h2>
+      <div class="grid">
+        <form class="card" method="post" action="/admin/upload?type=bg" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <h3>Background image</h3>
+          <div class="row">
+            <input type="file" name="file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg">
+            <button class="btn ok">Upload</button>
+            <a class="btn warn" href="/admin/clear_asset?type=bg">Clear</a>
+          </div>
+        </form>
+        <form class="card" method="post" action="/admin/upload?type=logo" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <h3>Game logo</h3>
+          <div class="row">
+            <input type="file" name="file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg">
+            <button class="btn ok">Upload</button>
+            <a class="btn warn" href="/admin/clear_asset?type=logo">Clear</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Bot Seeder</h2>
+      <form method="post" action="/admin/seed_bots" class="row">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input name="n" type="number" min="1" step="1" value="25" placeholder="How many bots?">
+        <label><input type="checkbox" name="overwrite" value="1"> Overwrite existing</label>
+        <button class="btn ok">Create Bots</button>
+      </form>
+
+      <h3>Fake Reviews</h3>
+      <form method="post" action="/admin/seed_reviews" class="row">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input name="m" type="number" min="1" step="1" value="40" placeholder="How many reviews?">
+        <button class="btn">Create Reviews</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Users</h2>
+      <table>
+        <thead><tr><th>User</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td>{{ u }}</td>
+            <td class="actions">
+              <form method="post" action="/admin/reset_pw">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="u" value="{{ u }}">
+                <input name="p" placeholder="New password" required>
+                <button class="btn ok">Reset password</button>
+              </form>
+              <form method="post" action="/admin/add">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="u" value="{{ u }}">
+                <input name="n" type="number" step="1" placeholder="+N">
+                <button class="btn warn">Add autists</button>
+              </form>
+              <form method="post" action="/admin/sub">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="u" value="{{ u }}">
+                <input name="n" type="number" step="1" placeholder="-N">
+                <button class="btn">Remove autists</button>
+              </form>
+              <form method="post" action="/admin/delete" onsubmit="return confirm('Delete {{ u }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="u" value="{{ u }}">
+                <button class="btn danger">Delete user</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Review Reports</h2>
+      <div class="grid">
+        {% for r in reports %}
+        <div class="report">
+          <div><strong>ts:</strong> {{ r.ts }}</div>
+          <div><strong>Reason:</strong> {{ r.reason }}</div>
+          <div><strong>By:</strong> {{ r.by }} | {{ r.at }}</div>
+        </div>
+        {% else %}
+        <div class="pill">No reports yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Delete Review</h2>
+      <form method="post" action="/admin/delete_review" class="row">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input name="ts" placeholder="Timestamp" required>
+        <button class="btn warn">Delete review</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
