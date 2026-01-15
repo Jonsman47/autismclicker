@@ -1,0 +1,9 @@
+{
+  "name": "autismclicker",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY python -m pip install -r requirements.txt && python app.py",
+    "test": "python -m py_compile app.py db.py game_logic.py achievements.py"
+  }
+}
